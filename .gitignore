@@ -1,0 +1,30 @@
+# Flutter & Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.pub-cache/
+app/.pub/
+
+# Secrets & Local Configs
+app/config/dev.json
+*.env
+
+# Large Binaries
+*.apk
+*.aab
+
+# OS & IDE
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.log
+.agents/
+.codex/

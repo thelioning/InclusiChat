@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InclusiChat — Comunicación Privada y Segura con Modo Camuflaje</title>
+  <meta name="description" content="InclusiChat es la aplicación de mensajería privada, inclusiva y segura con modo camuflaje de calculadora y descubrimiento por alias sin exponer tu número de teléfono.">
+  
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Barra de Navegación Superior -->
+  <header class="navbar" id="navbar">
+    <div class="nav-container">
+      <a href="#" class="brand-link">
+        <div class="brand-badge-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <span class="brand-text">InclusiChat</span>
+      </a>
+
+      <nav class="nav-menu">
+        <a href="#caracteristicas" class="nav-item">Características</a>
+        <a href="#camuflaje" class="nav-item">Modo Camuflaje</a>
+        <a href="#baremetal" class="nav-item">Baremetal Academy</a>
+        <a href="#descarga" class="nav-btn-action">Descargar APK</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="container hero-grid">
+      <div class="hero-content">
+        <div class="security-chip">
+          <span class="security-chip-dot"></span>
+          <span>Tecnología de Interés Público & Cifrado Seguro</span>
+        </div>
+        
+        <h1 class="hero-title">
+          InclusiChat: La herramienta de comunicación privada y segura con modo camuflaje.
+        </h1>
+        
+        <p class="hero-description">
+          Conversa con total libertad y protección. Conéctate a través de un <strong>@alias único</strong> sin exponer tu número de teléfono personal y protege tus conversaciones con un disfraz de calculadora matemática interactiva.
+        </p>
+
+        <div class="hero-cta-group">
+          <a href="#descarga" class="btn-primary" id="download-hero-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Descargar InclusiChat APK</span>
+          </a>
+          
+          <a href="#baremetal" class="btn-secondary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <span>Baremetal Academy</span>
+          </a>
+        </div>
+
+        <div class="trust-stats">
+          <div class="trust-stat-item">
+            <span class="stat-value">100%</span>
+            <span class="stat-label">Sin número de teléfono</span>
+          </div>
+          <div class="trust-stat-divider"></div>
+          <div class="trust-stat-item">
+            <span class="stat-value">E2EE</span>
+            <span class="stat-label">Cifrado de extremo a extremo</span>
+          </div>
+          <div class="trust-stat-divider"></div>
+          <div class="trust-stat-item">
+            <span class="stat-value">0 Coste</span>
+            <span class="stat-label">Software libre y abierto</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Visual Device Mockup -->
+      <div class="hero-mockup-wrap">
+        <div class="app-mockup-card">
+          <div class="mockup-header">
+            <div class="mockup-user">
+              <div class="mockup-avatar">M</div>
+              <div class="mockup-user-info">
+                <span class="mockup-name">Mayobanessa <span class="verified-check">✓</span></span>
+                <span class="mockup-status">En línea • Cifrado activo</span>
+              </div>
+            </div>
+            <div class="mockup-actions">
+              <span class="mockup-action-icon">📞</span>
+              <span class="mockup-action-icon">📹</span>
+            </div>
+          </div>
+
+          <div class="mockup-chat-body">
+            <div class="mockup-bubble incoming">
+              <p>Hola, ¿cómo estás? He activado la verificación segura en InclusiChat 🔒</p>
+              <span class="bubble-time">14:32</span>
+            </div>
+            
+            <div class="mockup-bubble outgoing">
+              <p>¡Excelente! Qué tranquilidad saber que nadie puede ver mi número ni mis datos. ✨</p>
+              <span class="bubble-time">14:33 <span class="bubble-check">✓✓</span></span>
+            </div>
+
+            <div class="mockup-bubble incoming">
+              <p>Y si alguien te pide el teléfono, con tocar el icono se disfraza de Calculadora 🧮</p>
+              <span class="bubble-time">14:35</span>
+            </div>
+          </div>
+
+          <div class="mockup-footer">
+            <div class="mockup-input">Escribe un mensaje seguro...</div>
+            <div class="mockup-send">🚀</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección de Características -->
+  <section class="features-section" id="caracteristicas">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Pilares de Seguridad</span>
+        <h2 class="section-title">Privacidad absoluta en cada interacción</h2>
+        <p class="section-desc">Diseñado desde cero para garantizar la confidencialidad de activistas, colectivos y usuarios que exigen el máximo control de su identidad.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon-wrap icon-purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 class="feature-title">Sin número de teléfono</h3>
+          <p class="feature-text">Regístrate y conéctate únicamente usando tu <strong>@alias único</strong>. Tu número de teléfono personal jamás es expuesto ni solicitado a tus contactos.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap icon-emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <h3 class="feature-title">Llamadas y Video Cifrados</h3>
+          <p class="feature-text">Comunícate por voz y video con cifrado de extremo a extremo. Controles de privacidad integrados para silenciar micrófono y altavoz en tiempo real.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap icon-blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <h3 class="feature-title">Consentimiento Mutuo</h3>
+          <p class="feature-text">Cero mensajes no deseados ni spam. Nadie puede enviarte mensajes hasta que hayas aceptado su solicitud de conexión de manera explícita.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap icon-amber">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <h3 class="feature-title">Derecho al Olvido</h3>
+          <p class="feature-text">Eliminación definitiva de cuenta en 1 clic. Borra tus datos, mensajes y perfiles de los servidores de forma irreversible y permanente.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección Killer Feature: Modo Camuflaje -->
+  <section class="camouflage-section" id="camuflaje">
+    <div class="container camouflage-grid">
+      <div class="camouflage-visual">
+        <div class="calculator-card">
+          <div class="calc-top-bar">
+            <span>Calculadora Estándar</span>
+            <span class="calc-badge">Modo Señuelo</span>
+          </div>
+          <div class="calc-display" id="calc-demo-display">1234</div>
+          <div class="calc-keyboard">
+            <span class="calc-key op">AC</span>
+            <span class="calc-key op">+/-</span>
+            <span class="calc-key op">%</span>
+            <span class="calc-key op-accent">÷</span>
+            <span class="calc-key">7</span>
+            <span class="calc-key">8</span>
+            <span class="calc-key">9</span>
+            <span class="calc-key op-accent">×</span>
+            <span class="calc-key">4</span>
+            <span class="calc-key">5</span>
+            <span class="calc-key">6</span>
+            <span class="calc-key op-accent">-</span>
+            <span class="calc-key">1</span>
+            <span class="calc-key">2</span>
+            <span class="calc-key">3</span>
+            <span class="calc-key op-accent">+</span>
+            <span class="calc-key wide">0</span>
+            <span class="calc-key">.</span>
+            <span class="calc-key equal-btn" id="calc-demo-equal">=</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="camouflage-info">
+        <span class="section-tag-emerald">Protección In Situ</span>
+        <h2 class="section-title">Modo Camuflaje: Disfraz Instantáneo de Calculadora</h2>
+        <p class="section-desc">
+          En situaciones de riesgo, inspección física no autorizada o revisiones forzosas de tu dispositivo, activa el <strong>Modo Camuflaje</strong> con un solo toque.
+        </p>
+        
+        <ul class="camouflage-points">
+          <li>
+            <div class="point-bullet">✓</div>
+            <div>
+              <strong>Calculadora Real y Operativa:</strong> Quien revise tu teléfono verá una calculadora matemática funcional estándar.
+            </div>
+          </li>
+          <li>
+            <div class="point-bullet">✓</div>
+            <div>
+              <strong>Desbloqueo Secreto por PIN:</strong> Digita tu código secreto (ej: <code>1234</code>) y presiona la tecla <code>=</code> para volver al instante a tu entorno seguro.
+            </div>
+          </li>
+          <li>
+            <div class="point-bullet">✓</div>
+            <div>
+              <strong>Cero Notificaciones Reveladoras:</strong> Las alertas se ocultan automáticamente mientras el modo de camuflaje esté activo.
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección Baremetal Academy: Educación Abierta -->
+  <section class="baremetal-section" id="baremetal">
+    <div class="container">
+      <div class="baremetal-banner">
+        <div class="baremetal-badge">
+          <span>Iniciativa de Interés Público y Educación Abierta</span>
+        </div>
+        
+        <h2 class="baremetal-title">Baremetal Academy</h2>
+        <p class="baremetal-subtitle">
+          El centro de capacitación comunitaria y formación abierta en privacidad digital, ciberseguridad y soberanía tecnológica.
+        </p>
+
+        <div class="baremetal-pillars-grid">
+          <div class="pillar-box">
+            <div class="pillar-icon">🛡️</div>
+            <h4 class="pillar-heading">Autodefensa Digital Comunitaria</h4>
+            <p class="pillar-text">Talleres y guías de libre acceso sobre protección de identidad, gestión de contraseñas y mitigación de vigilancia.</p>
+          </div>
+
+          <div class="pillar-box">
+            <div class="pillar-icon">💻</div>
+            <h4 class="pillar-heading">Desarrollo de Software Seguro</h4>
+            <p class="pillar-text">Formación técnica gratuita en arquitecturas de cifrado, bases de datos con RLS y desarrollo de aplicaciones móviles con Flutter.</p>
+          </div>
+
+          <div class="pillar-box">
+            <div class="pillar-icon">🌐</div>
+            <h4 class="pillar-heading">Recursos de Código Abierto</h4>
+            <p class="pillar-text">Materiales pedagógicos, esquemas de seguridad y herramientas libres disponibles para colectivos, estudiantes e investigadores.</p>
+          </div>
+        </div>
+
+        <div class="baremetal-footer-callout">
+          <p>Todos los recursos formativos de Baremetal Academy son de <strong>acceso 100% libre y gratuito</strong>, financiados por donaciones de impacto y fondos de tecnología de interés público.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección de Descarga -->
+  <section class="download-section" id="descarga">
+    <div class="container download-box">
+      <div class="download-header">
+        <span class="section-tag">Versión Inicial Android</span>
+        <h2 class="section-title">Comienza a comunicarte con total libertad</h2>
+        <p class="section-desc">Descarga el paquete instalable seguro de InclusiChat e instálalo directamente en tu teléfono Android.</p>
+      </div>
+
+      <div class="download-actions-card">
+        <div class="download-meta-info">
+          <div class="meta-item">
+            <span class="meta-label">Versión</span>
+            <span class="meta-val">1.0.0 (Release Estable)</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Plataforma</span>
+            <span class="meta-val">Android 5.0+</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Seguridad</span>
+            <span class="meta-val">Row Level Security & E2EE</span>
+          </div>
+        </div>
+
+        <div class="download-btn-wrap">
+          <a href="https://drive.google.com" target="_blank" class="btn-download-main" id="btn-download-apk">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <div class="btn-download-text">
+              <span class="btn-small-text">Descargar paquete oficial</span>
+              <span class="btn-large-text">InclusiChat-v1.0.apk (58 MB)</span>
+            </div>
+          </a>
+        </div>
+
+        <div class="install-steps">
+          <h4 class="steps-title">Guía rápida de instalación:</h4>
+          <ol class="steps-list">
+            <li>Descarga el archivo <code>InclusiChat-v1.0.apk</code> en tu teléfono.</li>
+            <li>Abre el archivo y pulsa <strong>Instalar</strong> (habilita la opción "Permitir desde esta fuente" si tu dispositivo lo solicita).</li>
+            <li>Abre InclusiChat, regístrate con tu correo y elige tu <strong>@alias</strong> único.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-brand">
+        <span class="footer-logo-title">InclusiChat</span>
+        <p class="footer-tagline">Mensajería privada e inclusiva para conectar con libertad.</p>
+        <p class="footer-copy">© 2026 InclusiChat & Baremetal Academy. Proyecto de tecnología de interés público y software libre.</p>
+      </div>
+
+      <div class="footer-links-group">
+        <div class="footer-col">
+          <span class="footer-col-title">Plataforma</span>
+          <a href="#caracteristicas">Características</a>
+          <a href="#camuflaje">Modo Camuflaje</a>
+          <a href="#descarga">Descargar APK</a>
+        </div>
+        <div class="footer-col">
+          <span class="footer-col-title">Comunidad</span>
+          <a href="#baremetal">Baremetal Academy</a>
+          <a href="https://github.com/thelioning/InclusiChat" target="_blank">Código en GitHub</a>
+        </div>
+        <div class="footer-col">
+          <span class="footer-col-title">Legal y Seguridad</span>
+          <a href="privacy.html">Política de Privacidad</a>
+          <a href="terms.html">Términos de Servicio</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

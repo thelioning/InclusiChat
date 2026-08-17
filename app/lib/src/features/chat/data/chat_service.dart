@@ -1,0 +1,472 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class ConversationSummary {
+  const ConversationSummary({
+    required this.id,
+    required this.title,
+    required this.type,
+    required this.lastActivityAt,
+    this.unreadCount = 0,
+    this.avatarUrl,
+    this.lastMessage,
+    this.isStarred = false,
+  });
+
+  final String id;
+  final String title;
+  final String type; // 'direct', 'circle', 'collective'
+  final String? avatarUrl;
+  final String? lastMessage;
+  final DateTime lastActivityAt;
+  final int unreadCount;
+  final bool isStarred;
+}
+
+class ContactProfile {
+  const ContactProfile({
+    required this.id,
+    required this.displayName,
+    this.username,
+    this.avatarUrl,
+    this.bio,
+    this.pronouns,
+    this.isVerified = false,
+    this.circleCategory = 'general',
+  });
+
+  final String id;
+  final String displayName;
+  final String? username;
+  final String? avatarUrl;
+  final String? bio;
+  final String? pronouns;
+  final bool isVerified;
+  final String circleCategory;
+}
+
+class ContactRequestItem {
+  const ContactRequestItem({
+    required this.id,
+    required this.senderId,
+    required this.receiverId,
+    required this.status,
+    required this.createdAt,
+    required this.profile,
+    required this.isIncoming,
+  });
+
+  final String id;
+  final String senderId;
+  final String receiverId;
+  final String status;
+  final DateTime createdAt;
+  final ContactProfile profile;
+  final bool isIncoming;
+}
+
+class UserProfileData {
+  const UserProfileData({
+    required this.id,
+    required this.displayName,
+    required this.username,
+    this.avatarUrl,
+    this.bio,
+    this.pronouns,
+    this.isVerified = false,
+  });
+
+  final String id;
+  final String displayName;
+  final String username;
+  final String? avatarUrl;
+  final String? bio;
+  final String? pronouns;
+  final bool isVerified;
+}
+
+class ChatService {
+  ChatService({SupabaseClient? client})
+    : _client = client ?? Supabase.instance.client;
+
+  final SupabaseClient _client;
+
+  String get _userId {
+    final id = _client.auth.currentUser?.id;
+    if (id == null) throw const AuthException('No authenticated user');
+    return id;
+  }
+
+  String get currentUserId => _userId;
+
+  Future<UserProfileData> loadUserProfile() async {
+    final row = await _client
+        .from('profiles')
+        .select()
+        .eq('id', _userId)
+        .maybeSingle();
+
+    if (row == null) {
+      final user = _client.auth.currentUser;
+      final rawName = user?.userMetadata?['display_name'] as String? ?? 'Usuario';
+      final rawUsername = user?.userMetadata?['username'] as String? ?? 'user_${_userId.substring(0, 6)}';
+      return UserProfileData(
+        id: _userId,
+        displayName: rawName,
+        username: rawUsername,
+      );
+    }
+
+    return UserProfileData(
+      id: row['id'] as String,
+      displayName: row['display_name'] as String? ?? 'Usuario',
+      username: row['username'] as String? ?? '',
+      avatarUrl: row['avatar_url'] as String?,
+      bio: row['bio'] as String?,
+      pronouns: row['pronouns'] as String?,
+      isVerified: row['is_verified'] as bool? ?? false,
+    );
+  }
+
+  Future<void> updateUserProfile({
+    required String displayName,
+    required String username,
+    String? bio,
+    String? pronouns,
+    String? avatarUrl,
+  }) async {
+    final sanitizedUsername = username.trim().toLowerCase().replaceAll('@', '');
+    await _client.from('profiles').upsert({
+      'id': _userId,
+      'display_name': displayName.trim(),
+      'username': sanitizedUsername,
+      'bio': bio?.trim(),
+      'pronouns': pronouns?.trim(),
+      'avatar_url': avatarUrl,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  Future<List<ConversationSummary>> loadConversations() async {
+    final membershipRows = await _client
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', _userId)
+        .isFilter('left_at', null);
+    final ids = membershipRows
+        .map<String>((row) => row['conversation_id'] as String)
+        .toList();
+    if (ids.isEmpty) return const [];
+
+    final conversationRows = await _client
+        .from('conversations')
+        .select()
+        .inFilter('id', ids)
+        .order('last_activity_at', ascending: false);
+    final participantRows = await _client
+        .from('conversation_participants')
+        .select('conversation_id,user_id')
+        .inFilter('conversation_id', ids)
+        .neq('user_id', _userId)
+        .isFilter('left_at', null);
+    final otherUserIds = participantRows
+        .map<String>((row) => row['user_id'] as String)
+        .toSet()
+        .toList();
+    final profileRows = otherUserIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await _client
+            .from('profiles')
+            .select('id,display_name,username,avatar_url')
+            .inFilter('id', otherUserIds);
+    final profiles = {for (final row in profileRows) row['id'] as String: row};
+    final partnerByConversation = {
+      for (final row in participantRows)
+        row['conversation_id'] as String: profiles[row['user_id']],
+    };
+
+    final messageRows = await _client
+        .from('messages')
+        .select('id,conversation_id,sender_id,content,created_at')
+        .inFilter('conversation_id', ids)
+        .eq('is_deleted', false)
+        .order('created_at', ascending: false);
+    final latestMessage = <String, String?>{};
+    for (final row in messageRows) {
+      latestMessage.putIfAbsent(
+        row['conversation_id'] as String,
+        () => row['content'] as String?,
+      );
+    }
+    final incomingMessageIds = messageRows
+        .where((row) => row['sender_id'] != _userId)
+        .map<String>((row) => row['id'] as String)
+        .toList();
+    final receiptRows = incomingMessageIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await _client
+            .from('message_receipts')
+            .select('message_id,status')
+            .eq('user_id', _userId)
+            .inFilter('message_id', incomingMessageIds);
+    final readMessageIds = receiptRows
+        .where((row) => row['status'] == 'read')
+        .map<String>((row) => row['message_id'] as String)
+        .toSet();
+    final unreadByConversation = <String, int>{};
+    for (final row in messageRows) {
+      final messageId = row['id'] as String;
+      if (row['sender_id'] != _userId && !readMessageIds.contains(messageId)) {
+        final conversationId = row['conversation_id'] as String;
+        unreadByConversation.update(
+          conversationId,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+    }
+
+    return conversationRows.map((row) {
+      final id = row['id'] as String;
+      final partner = partnerByConversation[id];
+      final customTitle = (row['title'] as String?)?.trim();
+      final partnerName = (partner?['display_name'] as String?)?.trim();
+      return ConversationSummary(
+        id: id,
+        type: row['type'] as String? ?? 'direct',
+        title: customTitle?.isNotEmpty == true
+            ? customTitle!
+            : partnerName?.isNotEmpty == true
+            ? partnerName!
+            : 'Conversación',
+        avatarUrl: (row['avatar_url'] ?? partner?['avatar_url']) as String?,
+        lastMessage: latestMessage[id],
+        unreadCount: unreadByConversation[id] ?? 0,
+        lastActivityAt: DateTime.parse(row['last_activity_at'] as String),
+      );
+    }).toList();
+  }
+
+  Future<List<ContactProfile>> loadContacts() async {
+    final rows = await _client
+        .from('contacts')
+        .select('contact_user_id,circle_category')
+        .eq('user_id', _userId);
+    final ids = rows
+        .map<String>((row) => row['contact_user_id'] as String)
+        .toList();
+    if (ids.isEmpty) return const [];
+    
+    final categoryById = {
+      for (final r in rows)
+        r['contact_user_id'] as String: r['circle_category'] as String? ?? 'general',
+    };
+
+    final profiles = await _client
+        .from('profiles')
+        .select('id,display_name,username,avatar_url,bio,pronouns,is_verified')
+        .inFilter('id', ids)
+        .order('display_name');
+    return profiles
+        .map(
+          (row) => ContactProfile(
+            id: row['id'] as String,
+            displayName:
+                (row['display_name'] as String?)?.trim().isNotEmpty == true
+                ? row['display_name'] as String
+                : 'Usuario de InclusiChat',
+            username: row['username'] as String?,
+            avatarUrl: row['avatar_url'] as String?,
+            bio: row['bio'] as String?,
+            pronouns: row['pronouns'] as String?,
+            isVerified: row['is_verified'] as bool? ?? false,
+            circleCategory: categoryById[row['id']] ?? 'general',
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<ContactProfile>> searchProfiles(String query) async {
+    final cleanQuery = query.trim().replaceAll('@', '');
+    if (cleanQuery.isEmpty) return const [];
+
+    try {
+      final rpcResults = await _client.rpc(
+        'search_profiles',
+        params: {'query_text': cleanQuery},
+      );
+      if (rpcResults is List) {
+        return rpcResults.map((r) => ContactProfile(
+          id: r['id'] as String,
+          displayName: r['display_name'] as String? ?? 'Usuario',
+          username: r['username'] as String?,
+          avatarUrl: r['avatar_url'] as String?,
+          isVerified: r['is_verified'] as bool? ?? false,
+        )).toList();
+      }
+    } catch (_) {
+      // Fallback a consulta directa si la RPC aún no está creada
+      final rows = await _client
+          .from('profiles')
+          .select('id,display_name,username,avatar_url,is_verified')
+          .neq('id', _userId)
+          .or('username.ilike.%$cleanQuery%,display_name.ilike.%$cleanQuery%')
+          .limit(15);
+      return (rows as List).map((r) => ContactProfile(
+        id: r['id'] as String,
+        displayName: r['display_name'] as String? ?? 'Usuario',
+        username: r['username'] as String?,
+        avatarUrl: r['avatar_url'] as String?,
+        isVerified: r['is_verified'] as bool? ?? false,
+      )).toList();
+    }
+    return const [];
+  }
+
+  Future<Map<String, dynamic>> sendContactRequest(String targetUsername) async {
+    final cleanUsername = targetUsername.trim().toLowerCase().replaceAll('@', '');
+    try {
+      final res = await _client.rpc(
+        'send_contact_request',
+        params: {'target_username': cleanUsername},
+      );
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+      return {'success': true, 'message': 'Solicitud enviada'};
+    } catch (e) {
+      return {'success': false, 'message': 'No se pudo enviar la solicitud.'};
+    }
+  }
+
+  Future<List<ContactRequestItem>> loadContactRequests() async {
+    final rows = await _client
+        .from('contact_requests')
+        .select()
+        .or('sender_id.eq.$_userId,receiver_id.eq.$_userId')
+        .eq('status', 'pending')
+        .order('created_at', ascending: false);
+
+    if ((rows as List).isEmpty) return const [];
+
+    final otherIds = rows
+        .map<String>((r) => (r['sender_id'] == _userId ? r['receiver_id'] : r['sender_id']) as String)
+        .toSet()
+        .toList();
+
+    final profileRows = await _client
+        .from('profiles')
+        .select('id,display_name,username,avatar_url,is_verified')
+        .inFilter('id', otherIds);
+
+    final profileMap = {
+      for (final p in profileRows)
+        p['id'] as String: ContactProfile(
+          id: p['id'] as String,
+          displayName: p['display_name'] as String? ?? 'Usuario',
+          username: p['username'] as String?,
+          avatarUrl: p['avatar_url'] as String?,
+          isVerified: p['is_verified'] as bool? ?? false,
+        )
+    };
+
+    return rows.map((r) {
+      final isIncoming = r['receiver_id'] == _userId;
+      final otherId = isIncoming ? r['sender_id'] as String : r['receiver_id'] as String;
+      final profile = profileMap[otherId] ?? ContactProfile(
+        id: otherId,
+        displayName: 'Usuario de InclusiChat',
+      );
+
+      return ContactRequestItem(
+        id: r['id'] as String,
+        senderId: r['sender_id'] as String,
+        receiverId: r['receiver_id'] as String,
+        status: r['status'] as String,
+        createdAt: DateTime.parse(r['created_at'] as String),
+        profile: profile,
+        isIncoming: isIncoming,
+      );
+    }).toList();
+  }
+
+  Future<bool> acceptContactRequest(String requestId) async {
+    try {
+      final res = await _client.rpc(
+        'accept_contact_request',
+        params: {'request_id': requestId},
+      );
+      return res as bool? ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> rejectContactRequest(String requestId) async {
+    try {
+      final res = await _client.rpc(
+        'reject_contact_request',
+        params: {'request_id': requestId},
+      );
+      return res as bool? ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> removeContact(String contactUserId) async {
+    await _client
+        .from('contacts')
+        .delete()
+        .eq('user_id', _userId)
+        .eq('contact_user_id', contactUserId);
+  }
+
+  Future<String> createDirectConversation(String otherUserId) async {
+    final result = await _client.rpc(
+      'create_direct_conversation',
+      params: {'other_user_id': otherUserId},
+    );
+    return result as String;
+  }
+
+  Stream<List<Map<String, dynamic>>> watchMessages(String conversationId) {
+    return _client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .order('created_at')
+        .map((rows) => rows.where((row) => row['is_deleted'] != true).toList());
+  }
+
+  Stream<List<Map<String, dynamic>>> watchReceipts() {
+    return _client
+        .from('message_receipts')
+        .stream(primaryKey: ['message_id', 'user_id']);
+  }
+
+  Future<void> markMessageRead(String messageId) async {
+    await _client.from('message_receipts').upsert({
+      'message_id': messageId,
+      'user_id': _userId,
+      'status': 'read',
+      'status_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'message_id,user_id');
+  }
+
+  Future<void> sendTextMessage({
+    required String conversationId,
+    required String content,
+  }) async {
+    final text = content.trim();
+    if (text.isEmpty) return;
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': _userId,
+      'type': 'text',
+      'content': text,
+    });
+  }
+
+  bool isOwnMessage(Map<String, dynamic> message) =>
+      message['sender_id'] == _userId;
+}
