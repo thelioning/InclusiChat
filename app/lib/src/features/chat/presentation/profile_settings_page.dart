@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
@@ -22,6 +24,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   bool _isSaving = false;
   bool _isVerified = false;
   String? _avatarUrl;
+  final _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -57,19 +60,78 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 400,
+        maxHeight: 400,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        final base64String = base64Encode(bytes);
+        setState(() {
+          _avatarUrl = 'data:image/jpeg;base64,$base64String';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Foto seleccionada. Recuerda pulsar "Guardar cambios".'),
+              backgroundColor: AppColors.surfaceRaised,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo cargar la imagen: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  ImageProvider? _getAvatarProvider(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('data:image')) {
+      try {
+        final base64Str = url.split(',').last;
+        return MemoryImage(base64Decode(base64Str));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(url);
+  }
+
   void _showAvatarPicker() {
-    final avatarPresets = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-      'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150',
-      'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150',
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
+    // Galería Inclusiva y Diversa (Múltiples tonalidades de piel, identidades, afros, géneros y etnias)
+    final inclusiveAvatars = [
+      // Diversidad Afrodescendiente & Piel Oscura
+      'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150', // Mujer afrodescendiente
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', // Hombre afrodescendiente
+      'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150', // Joven piel oscura
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', // Mujer afro con trenzas
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', // Hombre piel morena / oscura
+      // Diversidad Latina e Indígena
+      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150', // Mujer latina
+      'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150', // Hombre latino
+      'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150', // Joven diversa
+      // Diversidad Asiática & Global
+      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150', // Joven asiático
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', // Mujer asiática
+      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', // Hombre global
     ];
 
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -79,32 +141,91 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Selecciona tu Avatar de Perfil',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Foto y Avatar de Perfil',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Elige una foto real o un avatar inclusivo.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Elige un avatar seguro o restaura tus iniciales.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            const SizedBox(height: 18),
+
+            // Acciones directas del teléfono: Galería y Cámara
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _pickImage(ImageSource.gallery);
+                    },
+                    icon: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+                    label: const Text('Galería del móvil'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _pickImage(ImageSource.camera);
+                    },
+                    icon: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+                    label: const Text('Tomar foto'),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 22),
+            const Text(
+              'Avatares Inclusivos y Diversos:',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+
             SizedBox(
-              height: 70,
+              height: 72,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: avatarPresets.length,
+                itemCount: inclusiveAvatars.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, idx) {
-                  final url = avatarPresets[idx];
+                  final url = inclusiveAvatars[idx];
                   return InkWell(
-                    borderRadius: BorderRadius.circular(35),
+                    borderRadius: BorderRadius.circular(36),
                     onTap: () {
                       setState(() => _avatarUrl = url);
                       Navigator.of(ctx).pop();
                     },
                     child: CircleAvatar(
-                      radius: 32,
+                      radius: 34,
+                      backgroundColor: AppColors.surfaceRaised,
                       backgroundImage: NetworkImage(url),
                     ),
                   );
@@ -120,19 +241,19 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                       setState(() => _avatarUrl = null);
                       Navigator.of(ctx).pop();
                     },
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    label: const Text('Quitar foto'),
+                    icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                    label: const Text('Quitar foto', style: TextStyle(color: AppColors.error)),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: FilledButton.icon(
+                  child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.of(ctx).pop();
                       _showCustomUrlDialog();
                     },
                     icon: const Icon(Icons.link_rounded),
-                    label: const Text('Enlace URL'),
+                    label: const Text('Pegar URL'),
                   ),
                 ),
               ],
@@ -237,7 +358,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                 CircleAvatar(
                                   radius: 46,
                                   backgroundColor: AppColors.secondary,
-                                  backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+                                  backgroundImage: _getAvatarProvider(_avatarUrl),
                                   child: _avatarUrl == null
                                       ? Text(
                                           _nameController.text.isNotEmpty
