@@ -32,6 +32,9 @@ class _ChatHomePageState extends State<ChatHomePage> {
   _ConversationFilter _filter = _ConversationFilter.all;
   final _chatService = ChatService();
   late Future<List<ConversationSummary>> _conversations;
+  int _pendingRequestsCount = 0;
+  List<ContactRequestItem> _incomingRequests = [];
+  Timer? _homeRefreshTimer;
 
   static const _titles = ['Conversaciones', 'Contactos', 'Ajustes'];
 
@@ -40,11 +43,33 @@ class _ChatHomePageState extends State<ChatHomePage> {
     super.initState();
     _conversations = _chatService.loadConversations();
     _chatService.loadUserProfile();
+    _checkRequests();
+    _homeRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) => _checkRequests());
+  }
+
+  @override
+  void dispose() {
+    _homeRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkRequests() async {
+    try {
+      final reqs = await _chatService.loadContactRequests();
+      final incoming = reqs.where((r) => r.isIncoming).toList();
+      if (mounted && (_pendingRequestsCount != incoming.length || _incomingRequests.length != incoming.length)) {
+        setState(() {
+          _pendingRequestsCount = incoming.length;
+          _incomingRequests = incoming;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _reloadConversations() async {
     setState(() => _conversations = _chatService.loadConversations());
     await _conversations;
+    _checkRequests();
   }
 
   Future<void> _startConversation() async {
@@ -98,12 +123,11 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 IconButton(
                   tooltip: 'Modo pánico / Camuflar',
                   onPressed: () => CamouflageService.instance.triggerCamouflage(),
-                  icon: const Icon(Icons.visibility_off_outlined, color: AppColors.warning),
+                  icon: const Icon(Icons.visibility_off_rounded, color: AppColors.primary),
                 ),
               PopupMenuButton<String>(
-                tooltip: 'Más opciones',
+                tooltip: 'Opciones',
                 onSelected: (value) {
-                  if (value == 'logout') _signOut();
                   if (value == 'profile') {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
@@ -114,6 +138,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
                       MaterialPageRoute<void>(builder: (_) => const CamouflageSettingsPage()),
                     );
                   }
+                  if (value == 'logout') _signOut();
                 },
                 itemBuilder: (context) => [
                   PopupMenuItem(
@@ -183,6 +208,8 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 onRefresh: _reloadConversations,
                 searchQuery: _searchQuery,
                 filter: _filter,
+                incomingRequests: _incomingRequests,
+                onGoToContacts: () => setState(() => _selectedIndex = 1),
                 onSearchChanged: (value) => setState(() => _searchQuery = value),
                 onFilterChanged: (value) => setState(() => _filter = value),
               ),
@@ -212,9 +239,21 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 selectedIcon: Icon(Icons.chat_bubble_rounded),
                 label: 'Chats',
               ),
-              const NavigationDestination(
-                icon: Icon(Icons.people_outline_rounded),
-                selectedIcon: Icon(Icons.people_rounded),
+              NavigationDestination(
+                icon: _pendingRequestsCount > 0
+                    ? Badge.count(
+                        count: _pendingRequestsCount,
+                        backgroundColor: AppColors.primary,
+                        child: const Icon(Icons.people_outline_rounded),
+                      )
+                    : const Icon(Icons.people_outline_rounded),
+                selectedIcon: _pendingRequestsCount > 0
+                    ? Badge.count(
+                        count: _pendingRequestsCount,
+                        backgroundColor: AppColors.primary,
+                        child: const Icon(Icons.people_rounded),
+                      )
+                    : const Icon(Icons.people_rounded),
                 label: 'Contactos',
               ),
               NavigationDestination(
@@ -248,6 +287,8 @@ class _ConversationList extends StatelessWidget {
     required this.onRefresh,
     required this.searchQuery,
     required this.filter,
+    required this.incomingRequests,
+    required this.onGoToContacts,
     required this.onSearchChanged,
     required this.onFilterChanged,
   });
@@ -256,6 +297,8 @@ class _ConversationList extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final String searchQuery;
   final _ConversationFilter filter;
+  final List<ContactRequestItem> incomingRequests;
+  final VoidCallback onGoToContacts;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<_ConversationFilter> onFilterChanged;
 
@@ -263,6 +306,52 @@ class _ConversationList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        if (incomingRequests.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.22),
+                  AppColors.surfaceRaised,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 20),
+              ),
+              title: Text(
+                '${incomingRequests.length} ${incomingRequests.length == 1 ? 'solicitud de contacto recibida' : 'solicitudes de contacto recibidas'}',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              subtitle: Text(
+                'De @${incomingRequests.first.profile.username ?? incomingRequests.first.profile.displayName} • Toca para responder',
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+              trailing: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: onGoToContacts,
+                child: const Text('Revisar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+              onTap: onGoToContacts,
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: TextField(
@@ -662,7 +751,7 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.info_outline_rounded,
           title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.0.2, autor, derechos y licencias',
+          subtitle: 'Versión 1.1.1, autor, derechos y licencias',
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -703,7 +792,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.1.0 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.1.1 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,
