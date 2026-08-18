@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../theme/app_colors.dart';
@@ -450,6 +451,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                         const SizedBox(height: 14),
                         TextFormField(
                           controller: _usernameController,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                          ],
                           validator: (v) {
                             final u = v?.trim().toLowerCase().replaceAll('@', '') ?? '';
                             if (u.length < 3) return 'Mínimo 3 caracteres';
