@@ -324,15 +324,69 @@ class ChatService {
 
   Future<Map<String, dynamic>> sendContactRequest(String targetUsername) async {
     final cleanUsername = targetUsername.trim().toLowerCase().replaceAll('@', '');
+    if (cleanUsername.isEmpty) {
+      return {'success': false, 'message': 'Escribe un alias válido.'};
+    }
+
     try {
       final res = await _client.rpc(
         'send_contact_request',
         params: {'target_username': cleanUsername},
       );
       if (res is Map) {
-        return Map<String, dynamic>.from(res);
+        final success = res['success'] as bool? ?? false;
+        final msg = res['message'] as String? ?? 'Solicitud procesada';
+        if (success || msg.contains('contactos') || msg.contains('mismo')) {
+          return Map<String, dynamic>.from(res);
+        }
       }
-      return {'success': true, 'message': 'Solicitud enviada'};
+    } catch (_) {
+      // Fallback a lógica directa si la RPC falla
+    }
+
+    try {
+      final targetRows = await _client
+          .from('profiles')
+          .select('id,username,display_name')
+          .or('username.ilike.$cleanUsername,username.ilike.@$cleanUsername')
+          .limit(1);
+
+      if ((targetRows as List).isEmpty) {
+        return {'success': false, 'message': 'Usuario @$cleanUsername no encontrado.'};
+      }
+
+      final target = targetRows.first;
+      final targetId = target['id'] as String;
+      final targetUName = (target['username'] as String? ?? cleanUsername).replaceAll('@', '');
+
+      if (targetId == _userId) {
+        return {'success': false, 'message': 'No puedes agregarte a ti mismo.'};
+      }
+
+      // Verificar si ya son contactos
+      final existingContact = await _client
+          .from('contacts')
+          .select('id')
+          .eq('user_id', _userId)
+          .eq('contact_user_id', targetId)
+          .maybeSingle();
+
+      if (existingContact != null) {
+        return {'success': false, 'message': 'Este usuario ya está en tus contactos.'};
+      }
+
+      // Insertar o actualizar solicitud
+      await _client.from('contact_requests').upsert({
+        'sender_id': _userId,
+        'receiver_id': targetId,
+        'status': 'pending',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      return {
+        'success': true,
+        'message': 'Solicitud enviada a @$targetUName',
+      };
     } catch (e) {
       return {'success': false, 'message': 'No se pudo enviar la solicitud.'};
     }
@@ -395,10 +449,33 @@ class ChatService {
         'accept_contact_request',
         params: {'request_id': requestId},
       );
-      return res as bool? ?? true;
-    } catch (_) {
-      return false;
-    }
+      if (res == true) return true;
+    } catch (_) {}
+
+    try {
+      final req = await _client
+          .from('contact_requests')
+          .select('sender_id,receiver_id')
+          .eq('id', requestId)
+          .maybeSingle();
+
+      if (req != null) {
+        await _client.from('contact_requests').update({
+          'status': 'accepted',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', requestId);
+
+        final senderId = req['sender_id'] as String;
+        final receiverId = req['receiver_id'] as String;
+
+        await _client.from('contacts').upsert([
+          {'user_id': receiverId, 'contact_user_id': senderId},
+          {'user_id': senderId, 'contact_user_id': receiverId},
+        ]);
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   Future<bool> rejectContactRequest(String requestId) async {
@@ -407,7 +484,15 @@ class ChatService {
         'reject_contact_request',
         params: {'request_id': requestId},
       );
-      return res as bool? ?? true;
+      if (res == true) return true;
+    } catch (_) {}
+
+    try {
+      await _client.from('contact_requests').update({
+        'status': 'rejected',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', requestId);
+      return true;
     } catch (_) {
       return false;
     }
@@ -422,11 +507,29 @@ class ChatService {
   }
 
   Future<String> createDirectConversation(String otherUserId) async {
-    final result = await _client.rpc(
-      'create_direct_conversation',
-      params: {'other_user_id': otherUserId},
-    );
-    return result as String;
+    try {
+      final result = await _client.rpc(
+        'create_direct_conversation',
+        params: {'other_user_id': otherUserId},
+      );
+      if (result != null) return result as String;
+    } catch (_) {}
+
+    try {
+      final conv = await _client.from('conversations').insert({
+        'type': 'direct',
+        'created_by': _userId,
+      }).select('id').single();
+
+      final convId = conv['id'] as String;
+      await _client.from('conversation_participants').insert([
+        {'conversation_id': convId, 'user_id': _userId, 'role': 'admin'},
+        {'conversation_id': convId, 'user_id': otherUserId, 'role': 'member'},
+      ]);
+      return convId;
+    } catch (e) {
+      throw Exception('Error al crear conversación: $e');
+    }
   }
 
   Stream<List<Map<String, dynamic>>> watchMessages(String conversationId) {
