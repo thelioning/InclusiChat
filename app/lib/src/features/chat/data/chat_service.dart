@@ -626,9 +626,13 @@ class ChatService {
         }
       }
 
+      final sortedUsers = [_userId, otherUserId]..sort();
+      final pairKey = '${sortedUsers[0]}:${sortedUsers[1]}';
+
       final conv = await _client.from('conversations').insert({
         'type': 'direct',
         'created_by': _userId,
+        'direct_pair_key': pairKey,
       }).select('id').single();
 
       final convId = conv['id'] as String;

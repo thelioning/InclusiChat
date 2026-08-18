@@ -165,11 +165,14 @@ create table if not exists public.conversations (
   type text default 'direct' check (type in ('direct', 'circle', 'collective')),
   title text,
   avatar_url text,
+  direct_pair_key text,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz default now(),
   last_activity_at timestamptz default now()
 );
 
+alter table public.conversations add column if not exists direct_pair_key text;
+alter table public.conversations drop constraint if exists direct_pair_key_rule;
 alter table public.conversations enable row level security;
 
 create table if not exists public.conversation_participants (
@@ -262,6 +265,7 @@ create trigger on_message_created
 create or replace function public.create_direct_conversation(other_user_id uuid)
 returns uuid as $$
 declare
+  pair_key text;
   existing_conv_id uuid;
   new_conv_id uuid;
 begin
@@ -269,34 +273,52 @@ begin
     raise exception 'No puedes iniciar una conversación contigo mismo.';
   end if;
 
-  -- Buscar si ya existe una conversación directa activa entre ambos
-  select cp1.conversation_id into existing_conv_id
-  from public.conversation_participants cp1
-  join public.conversation_participants cp2 on cp1.conversation_id = cp2.conversation_id
-  join public.conversations c on c.id = cp1.conversation_id
-  where c.type = 'direct'
-    and cp1.user_id = auth.uid() and cp1.left_at is null
-    and cp2.user_id = other_user_id and cp2.left_at is null
+  -- Clave única ordenada del par
+  pair_key := least(auth.uid()::text, other_user_id::text) || ':' || greatest(auth.uid()::text, other_user_id::text);
+
+  -- 1. Buscar si ya existe por direct_pair_key
+  select id into existing_conv_id
+  from public.conversations
+  where direct_pair_key = pair_key
   limit 1;
 
+  -- 2. Si no existe por direct_pair_key, buscar por participantes
+  if existing_conv_id is null then
+    select cp1.conversation_id into existing_conv_id
+    from public.conversation_participants cp1
+    join public.conversation_participants cp2 on cp1.conversation_id = cp2.conversation_id
+    join public.conversations c on c.id = cp1.conversation_id
+    where c.type = 'direct'
+      and cp1.user_id = auth.uid() and cp1.left_at is null
+      and cp2.user_id = other_user_id and cp2.left_at is null
+    limit 1;
+  end if;
+
   if existing_conv_id is not null then
+    insert into public.conversation_participants (conversation_id, user_id, role)
+    values
+      (existing_conv_id, auth.uid(), 'admin'),
+      (existing_conv_id, other_user_id, 'member')
+    on conflict do nothing;
+
     return existing_conv_id;
   end if;
 
-  -- Crear nueva conversación
-  insert into public.conversations (type, created_by)
-  values ('direct', auth.uid())
+  -- Crear nueva conversación con direct_pair_key
+  insert into public.conversations (type, created_by, direct_pair_key)
+  values ('direct', auth.uid(), pair_key)
   returning id into new_conv_id;
 
   -- Agregar a ambos participantes
   insert into public.conversation_participants (conversation_id, user_id, role)
   values
     (new_conv_id, auth.uid(), 'admin'),
-    (new_conv_id, other_user_id, 'member');
+    (new_conv_id, other_user_id, 'member')
+  on conflict do nothing;
 
   return new_conv_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- B. Búsqueda segura de perfiles por username o display_name
 create or replace function public.search_profiles(query_text text)
