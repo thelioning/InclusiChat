@@ -12,12 +12,19 @@ class InviteService {
         '📲 Descarga la app aquí:\nhttps://github.com/thelioning/InclusiChat/releases/download/v1.0.0/InclusiChat-v1.0.apk\n\n'
         'Al instalarla, búscame en la pestaña Contactos como @$username para chatear 🙌';
 
-    final uri = Uri.parse('https://api.whatsapp.com/send?text=${Uri.encodeComponent(text)}');
+    final nativeUri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
+    final webUri = Uri.parse('https://api.whatsapp.com/send?text=${Uri.encodeComponent(text)}');
 
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    try {
+      if (await canLaunchUrl(nativeUri)) {
+        await launchUrl(nativeUri);
+      } else if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(webUri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      await launchUrl(webUri, mode: LaunchMode.externalApplication);
     }
   }
 }
