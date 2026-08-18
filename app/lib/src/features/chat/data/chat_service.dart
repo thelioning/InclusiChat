@@ -392,19 +392,27 @@ class ChatService {
       }
 
       // Insertar o actualizar solicitud
-      await _client.from('contact_requests').upsert({
-        'sender_id': _userId,
-        'receiver_id': targetId,
-        'status': 'pending',
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      try {
+        await _client.from('contact_requests').insert({
+          'sender_id': _userId,
+          'receiver_id': targetId,
+          'status': 'pending',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {
+        await _client.from('contact_requests').update({
+          'status': 'pending',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('sender_id', _userId).eq('receiver_id', targetId);
+      }
 
       return {
         'success': true,
         'message': 'Solicitud enviada a @$targetUName',
       };
     } catch (e) {
-      return {'success': false, 'message': 'No se pudo enviar la solicitud.'};
+      final cleanErr = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
+      return {'success': false, 'message': cleanErr.isNotEmpty ? cleanErr : 'No se pudo enviar la solicitud.'};
     }
   }
 
