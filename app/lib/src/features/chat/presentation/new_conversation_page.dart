@@ -57,11 +57,14 @@ class _NewConversationPageState extends State<NewConversationPage> {
   }
 
   Future<void> _showAddContact() async {
-    final added = await showDialog<bool>(
+    final result = await showDialog<dynamic>(
       context: context,
       builder: (_) => const AddContactDialog(),
     );
-    if (added == true && mounted) {
+    if (!mounted) return;
+    if (result is ContactProfile) {
+      _open(result);
+    } else if (result != null) {
       _loadData();
     }
   }

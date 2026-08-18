@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
 import '../data/invite_service.dart';
-import 'conversation_page.dart';
 
 class AddContactDialog extends StatefulWidget {
   const AddContactDialog({super.key});
@@ -70,10 +69,7 @@ class _AddContactDialogState extends State<AddContactDialog> {
           backgroundColor: success ? AppColors.success : AppColors.warning,
         ),
       );
-
-      if (success) {
-        Navigator.of(context).pop(true);
-      }
+      Navigator.of(context).pop(profile);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -109,25 +105,26 @@ class _AddContactDialogState extends State<AddContactDialog> {
                       color: AppColors.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.person_add_rounded, color: AppColors.primary),
+                    child: const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primary, size: 20),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
                       'Agregar por @alias',
-                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded),
                     onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               const Text(
                 'Escribe el alias de usuario único (@usuario) para conectar de forma privada.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 16),
               Row(
@@ -204,23 +201,7 @@ class _AddContactDialogState extends State<AddContactDialog> {
                           final profile = _searchResults[index];
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
-                            onTap: () async {
-                              Navigator.of(context).pop(true);
-                              try {
-                                final convId = await _chatService.createDirectConversation(profile.id);
-                                if (context.mounted) {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => ConversationPage(
-                                        conversationId: convId,
-                                        title: profile.displayName,
-                                        avatarUrl: profile.avatarUrl,
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } catch (_) {}
-                            },
+                            onTap: () => Navigator.of(context).pop(profile),
                             leading: CircleAvatar(
                               backgroundColor: AppColors.secondary,
                               backgroundImage: profile.avatarUrl != null

@@ -33,11 +33,15 @@ class _ContactsPageState extends State<ContactsPage> {
   }
 
   Future<void> _showAddContactDialog() async {
-    final added = await showDialog<bool>(
+    final result = await showDialog<dynamic>(
       context: context,
       builder: (_) => const AddContactDialog(),
     );
-    if (added == true && mounted) {
+    if (!mounted) return;
+    if (result is ContactProfile) {
+      _loadData();
+      _openChat(result);
+    } else if (result != null) {
       _loadData();
     }
   }

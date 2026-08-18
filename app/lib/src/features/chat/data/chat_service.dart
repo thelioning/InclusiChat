@@ -279,13 +279,37 @@ class ChatService {
           .or('sender_id.eq.$_userId,receiver_id.eq.$_userId')
           .eq('status', 'accepted');
 
+      // También incluir compañeros de conversaciones activas
+      final myPartRows = await _client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', _userId)
+          .isFilter('left_at', null);
+
+      final myConvIds = (myPartRows as List)
+          .map<String>((r) => r['conversation_id'] as String)
+          .toList();
+
+      List<String> partnerUserIds = [];
+      if (myConvIds.isNotEmpty) {
+        final otherPartRows = await _client
+            .from('conversation_participants')
+            .select('user_id')
+            .inFilter('conversation_id', myConvIds)
+            .neq('user_id', _userId)
+            .isFilter('left_at', null);
+        partnerUserIds = (otherPartRows as List)
+            .map<String>((r) => r['user_id'] as String)
+            .toList();
+      }
+
       final idsFromContacts = (contactRows as List)
           .map<String>((r) => r['contact_user_id'] as String);
 
       final idsFromReqs = (acceptedReqRows as List)
           .map<String>((r) => (r['sender_id'] == _userId ? r['receiver_id'] : r['sender_id']) as String);
 
-      final allIds = {...idsFromContacts, ...idsFromReqs}
+      final allIds = {...idsFromContacts, ...idsFromReqs, ...partnerUserIds}
           .where((id) => id != _userId)
           .toList();
 
@@ -593,6 +617,15 @@ class ChatService {
         {'conversation_id': convId, 'user_id': _userId, 'role': 'admin'},
         {'conversation_id': convId, 'user_id': otherUserId, 'role': 'member'},
       ]);
+
+      try {
+        await _client.from('contacts').upsert({
+          'user_id': _userId,
+          'contact_user_id': otherUserId,
+          'circle_category': 'general',
+        });
+      } catch (_) {}
+
       return convId;
     } catch (e) {
       throw Exception('Error al crear conversación: $e');
