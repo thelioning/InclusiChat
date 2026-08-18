@@ -204,7 +204,25 @@ drop policy if exists "Participantes pueden ver sus conversaciones" on public.co
 create policy "Participantes pueden ver sus conversaciones"
   on public.conversations for select
   to authenticated
-  using (public.is_conversation_participant(id, auth.uid()));
+  using (
+    created_by = auth.uid()
+    or public.is_conversation_participant(id, auth.uid())
+  );
+
+drop policy if exists "Usuarios autenticados pueden crear conversaciones" on public.conversations;
+create policy "Usuarios autenticados pueden crear conversaciones"
+  on public.conversations for insert
+  to authenticated
+  with check (auth.uid() = created_by or created_by is null);
+
+drop policy if exists "Participantes pueden actualizar conversaciones" on public.conversations;
+create policy "Participantes pueden actualizar conversaciones"
+  on public.conversations for update
+  to authenticated
+  using (
+    created_by = auth.uid()
+    or public.is_conversation_participant(id, auth.uid())
+  );
 
 drop policy if exists "Participantes pueden ver datos de miembros" on public.conversation_participants;
 create policy "Participantes pueden ver datos de miembros"
@@ -214,6 +232,24 @@ create policy "Participantes pueden ver datos de miembros"
     user_id = auth.uid()
     or public.is_conversation_participant(conversation_id, auth.uid())
   );
+
+drop policy if exists "Permitir insercion de participantes" on public.conversation_participants;
+create policy "Permitir insercion de participantes"
+  on public.conversation_participants for insert
+  to authenticated
+  with check (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.conversations c
+      where c.id = conversation_id and c.created_by = auth.uid()
+    )
+  );
+
+drop policy if exists "Permitir actualizar propios datos de participante" on public.conversation_participants;
+create policy "Permitir actualizar propios datos de participante"
+  on public.conversation_participants for update
+  to authenticated
+  using (auth.uid() = user_id);
 
 -- 6. MENSAJES Y RECIBOS DE ENTREGA/LECTURA
 create table if not exists public.messages (
