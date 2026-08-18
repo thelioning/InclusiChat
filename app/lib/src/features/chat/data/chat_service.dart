@@ -273,11 +273,10 @@ class ChatService {
           .select('contact_user_id,circle_category')
           .eq('user_id', _userId);
 
-      final acceptedReqRows = await _client
+      final allReqRows = await _client
           .from('contact_requests')
           .select('sender_id,receiver_id')
-          .or('sender_id.eq.$_userId,receiver_id.eq.$_userId')
-          .eq('status', 'accepted');
+          .or('sender_id.eq.$_userId,receiver_id.eq.$_userId');
 
       // También incluir compañeros de conversaciones activas
       final myPartRows = await _client
@@ -306,7 +305,7 @@ class ChatService {
       final idsFromContacts = (contactRows as List)
           .map<String>((r) => r['contact_user_id'] as String);
 
-      final idsFromReqs = (acceptedReqRows as List)
+      final idsFromReqs = (allReqRows as List)
           .map<String>((r) => (r['sender_id'] == _userId ? r['receiver_id'] : r['sender_id']) as String);
 
       final allIds = {...idsFromContacts, ...idsFromReqs, ...partnerUserIds}
@@ -682,7 +681,7 @@ class ChatService {
         'conversation_id': conversationId,
         'user_id': _userId,
         'role': 'member',
-      }, onConflict: 'conversation_id,user_id');
+      }, onConflict: 'conversation_id,user_id').timeout(const Duration(seconds: 4));
     } catch (_) {}
 
     await _client.from('messages').insert({
@@ -690,7 +689,7 @@ class ChatService {
       'sender_id': _userId,
       'type': 'text',
       'content': text,
-    });
+    }).timeout(const Duration(seconds: 8));
   }
 
   bool isOwnMessage(Map<String, dynamic> message) =>

@@ -703,7 +703,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.0.6 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.0.7 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,

@@ -228,78 +228,150 @@ class _ContactsPageState extends State<ContactsPage> {
               builder: (context, snapshot) {
                 final requests = snapshot.data ?? [];
                 final incoming = requests.where((r) => r.isIncoming).toList();
-                if (incoming.isEmpty) return const SizedBox.shrink();
+                final outgoing = requests.where((r) => !r.isIncoming).toList();
+                if (incoming.isEmpty && outgoing.isEmpty) return const SizedBox.shrink();
 
-                return Container(
-                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceRaised,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.mail_outline_rounded, color: AppColors.primary, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Solicitudes recibidas (${incoming.length})',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: incoming.length,
-                        separatorBuilder: (_, __) => const Divider(height: 12),
-                        itemBuilder: (context, idx) {
-                          final req = incoming[idx];
-                          return Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: AppColors.secondary,
-                                child: Text(req.profile.displayName.characters.first.toUpperCase()),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      req.profile.displayName,
-                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                    ),
-                                    if (req.profile.username != null)
-                                      Text(
-                                        '@${req.profile.username}',
-                                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                      ),
-                                  ],
+                return Column(
+                  children: [
+                    if (incoming.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceRaised,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.mail_outline_rounded, color: AppColors.primary, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Solicitudes recibidas (${incoming.length})',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                                 ),
-                              ),
-                              IconButton.filledTonal(
-                                tooltip: 'Aceptar',
-                                onPressed: () => _acceptRequest(req),
-                                icon: const Icon(Icons.check_rounded, color: AppColors.success, size: 20),
-                              ),
-                              const SizedBox(width: 4),
-                              IconButton.filledTonal(
-                                tooltip: 'Rechazar',
-                                onPressed: () => _rejectRequest(req),
-                                icon: const Icon(Icons.close_rounded, color: AppColors.error, size: 20),
-                              ),
-                            ],
-                          );
-                        },
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: incoming.length,
+                              separatorBuilder: (_, __) => const Divider(height: 12),
+                              itemBuilder: (context, idx) {
+                                final req = incoming[idx];
+                                return Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: AppColors.secondary,
+                                      child: Text(req.profile.displayName.characters.first.toUpperCase()),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            req.profile.displayName,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                          ),
+                                          if (req.profile.username != null)
+                                            Text(
+                                              '@${req.profile.username}',
+                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton.filledTonal(
+                                      tooltip: 'Aceptar',
+                                      onPressed: () => _acceptRequest(req),
+                                      icon: const Icon(Icons.check_rounded, color: AppColors.success, size: 20),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton.filledTonal(
+                                      tooltip: 'Rechazar',
+                                      onPressed: () => _rejectRequest(req),
+                                      icon: const Icon(Icons.close_rounded, color: AppColors.error, size: 20),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    if (outgoing.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceRaised,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.outbox_rounded, color: AppColors.secondary, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Solicitudes enviadas (${outgoing.length})',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: outgoing.length,
+                              separatorBuilder: (_, __) => const Divider(height: 12),
+                              itemBuilder: (context, idx) {
+                                final req = outgoing[idx];
+                                return Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: AppColors.surface,
+                                      child: Text(req.profile.displayName.characters.first.toUpperCase()),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            req.profile.displayName,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                          ),
+                                          if (req.profile.username != null)
+                                            Text(
+                                              '@${req.profile.username} • Esperando aceptación',
+                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: () => _openChat(req.profile),
+                                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                      label: const Text('Chatear'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
