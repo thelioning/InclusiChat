@@ -184,29 +184,35 @@ create table if not exists public.conversation_participants (
 
 alter table public.conversation_participants enable row level security;
 
+-- Helper security definer para comprobar pertenencia a conversación sin causar recursión RLS (Error 42P17)
+create or replace function public.is_conversation_participant(conv_id uuid, u_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.conversation_participants
+    where conversation_id = conv_id
+      and user_id = u_id
+      and left_at is null
+  );
+$$;
+
 drop policy if exists "Participantes pueden ver sus conversaciones" on public.conversations;
 create policy "Participantes pueden ver sus conversaciones"
   on public.conversations for select
   to authenticated
-  using (
-    exists (
-      select 1 from public.conversation_participants
-      where conversation_id = public.conversations.id
-      and user_id = auth.uid()
-      and left_at is null
-    )
-  );
+  using (public.is_conversation_participant(id, auth.uid()));
 
 drop policy if exists "Participantes pueden ver datos de miembros" on public.conversation_participants;
 create policy "Participantes pueden ver datos de miembros"
   on public.conversation_participants for select
   to authenticated
   using (
-    exists (
-      select 1 from public.conversation_participants cp
-      where cp.conversation_id = public.conversation_participants.conversation_id
-      and cp.user_id = auth.uid()
-    )
+    user_id = auth.uid()
+    or public.is_conversation_participant(conversation_id, auth.uid())
   );
 
 -- 6. MENSAJES Y RECIBOS DE ENTREGA/LECTURA
@@ -227,14 +233,7 @@ drop policy if exists "Participantes pueden leer mensajes" on public.messages;
 create policy "Participantes pueden leer mensajes"
   on public.messages for select
   to authenticated
-  using (
-    exists (
-      select 1 from public.conversation_participants
-      where conversation_id = public.messages.conversation_id
-      and user_id = auth.uid()
-      and left_at is null
-    )
-  );
+  using (public.is_conversation_participant(conversation_id, auth.uid()));
 
 drop policy if exists "Participantes pueden enviar mensajes" on public.messages;
 create policy "Participantes pueden enviar mensajes"
@@ -242,12 +241,7 @@ create policy "Participantes pueden enviar mensajes"
   to authenticated
   with check (
     auth.uid() = sender_id
-    and exists (
-      select 1 from public.conversation_participants
-      where conversation_id = public.messages.conversation_id
-      and user_id = auth.uid()
-      and left_at is null
-    )
+    and public.is_conversation_participant(conversation_id, auth.uid())
   );
 
 create table if not exists public.message_receipts (
