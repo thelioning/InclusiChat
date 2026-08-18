@@ -6,6 +6,8 @@ import '../data/invite_service.dart';
 import 'add_contact_dialog.dart';
 import 'conversation_page.dart';
 
+import 'dart:async';
+
 class ContactsPage extends StatefulWidget {
   const ContactsPage({super.key});
 
@@ -18,11 +20,26 @@ class _ContactsPageState extends State<ContactsPage> {
   late Future<List<ContactProfile>> _contactsFuture;
   late Future<List<ContactRequestItem>> _requestsFuture;
   String _searchFilter = '';
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) {
+        setState(() {
+          _requestsFuture = _chatService.loadContactRequests();
+          _contactsFuture = _chatService.loadContacts();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   void _loadData() {
