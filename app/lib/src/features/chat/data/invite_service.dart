@@ -8,8 +8,9 @@ class InviteService {
         user?.userMetadata?['username'] as String? ??
         (user?.email != null ? user!.email!.split('@').first : 'usuario');
 
-    final text = '¡Hola! Ya estoy usando InclusiChat, la app de mensajería privada y segura. '
-        'Descárgala para que conversemos con total privacidad y búscame como @$username ✨';
+    final text = '¡Hola! Te invito a probar InclusiChat 💜✨ Mensajería privada y segura sin compartir tu número de teléfono.\n\n'
+        '📲 Descarga la app aquí:\nhttps://github.com/thelioning/InclusiChat/releases/download/v1.0.0/InclusiChat-v1.0.apk\n\n'
+        'Al instalarla, búscame en la pestaña Contactos como @$username para chatear 🙌';
 
     final uri = Uri.parse('https://api.whatsapp.com/send?text=${Uri.encodeComponent(text)}');
 
