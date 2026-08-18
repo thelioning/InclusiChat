@@ -184,72 +184,16 @@ create table if not exists public.conversation_participants (
 
 alter table public.conversation_participants enable row level security;
 
--- Helper security definer para comprobar pertenencia a conversación sin causar recursión RLS (Error 42P17)
-create or replace function public.is_conversation_participant(conv_id uuid, u_id uuid)
-returns boolean
-language sql
-security definer
-set search_path = public
-stable
-as $$
-  select exists (
-    select 1 from public.conversation_participants
-    where conversation_id = conv_id
-      and user_id = u_id
-      and left_at is null
-  );
-$$;
-
-drop policy if exists "Participantes pueden ver sus conversaciones" on public.conversations;
-create policy "Participantes pueden ver sus conversaciones"
-  on public.conversations for select
-  to authenticated
-  using (
-    created_by = auth.uid()
-    or public.is_conversation_participant(id, auth.uid())
-  );
-
-drop policy if exists "Usuarios autenticados pueden crear conversaciones" on public.conversations;
-create policy "Usuarios autenticados pueden crear conversaciones"
-  on public.conversations for insert
-  to authenticated
-  with check (auth.uid() = created_by or created_by is null);
-
-drop policy if exists "Participantes pueden actualizar conversaciones" on public.conversations;
-create policy "Participantes pueden actualizar conversaciones"
-  on public.conversations for update
-  to authenticated
-  using (
-    created_by = auth.uid()
-    or public.is_conversation_participant(id, auth.uid())
-  );
-
 drop policy if exists "Participantes pueden ver datos de miembros" on public.conversation_participants;
-create policy "Participantes pueden ver datos de miembros"
-  on public.conversation_participants for select
-  to authenticated
-  using (
-    user_id = auth.uid()
-    or public.is_conversation_participant(conversation_id, auth.uid())
-  );
-
 drop policy if exists "Permitir insercion de participantes" on public.conversation_participants;
-create policy "Permitir insercion de participantes"
-  on public.conversation_participants for insert
-  to authenticated
-  with check (
-    auth.uid() = user_id
-    or exists (
-      select 1 from public.conversations c
-      where c.id = conversation_id and c.created_by = auth.uid()
-    )
-  );
-
 drop policy if exists "Permitir actualizar propios datos de participante" on public.conversation_participants;
-create policy "Permitir actualizar propios datos de participante"
-  on public.conversation_participants for update
+drop policy if exists "conversation_participants_access_policy" on public.conversation_participants;
+
+create policy "conversation_participants_access_policy"
+  on public.conversation_participants for all
   to authenticated
-  using (auth.uid() = user_id);
+  using (true)
+  with check (true);
 
 -- 6. MENSAJES Y RECIBOS DE ENTREGA/LECTURA
 create table if not exists public.messages (
@@ -266,19 +210,14 @@ create table if not exists public.messages (
 alter table public.messages enable row level security;
 
 drop policy if exists "Participantes pueden leer mensajes" on public.messages;
-create policy "Participantes pueden leer mensajes"
-  on public.messages for select
-  to authenticated
-  using (public.is_conversation_participant(conversation_id, auth.uid()));
-
 drop policy if exists "Participantes pueden enviar mensajes" on public.messages;
-create policy "Participantes pueden enviar mensajes"
-  on public.messages for insert
+drop policy if exists "messages_access_policy" on public.messages;
+
+create policy "messages_access_policy"
+  on public.messages for all
   to authenticated
-  with check (
-    auth.uid() = sender_id
-    and public.is_conversation_participant(conversation_id, auth.uid())
-  );
+  using (true)
+  with check (true);
 
 create table if not exists public.message_receipts (
   id uuid primary key default gen_random_uuid(),
@@ -292,17 +231,14 @@ create table if not exists public.message_receipts (
 alter table public.message_receipts enable row level security;
 
 drop policy if exists "Ver recibos de mensajes en conversaciones compartidas" on public.message_receipts;
-create policy "Ver recibos de mensajes en conversaciones compartidas"
-  on public.message_receipts for select
-  to authenticated
-  using (true);
-
 drop policy if exists "Actualizar o insertar propios recibos" on public.message_receipts;
-create policy "Actualizar o insertar propios recibos"
+drop policy if exists "message_receipts_access_policy" on public.message_receipts;
+
+create policy "message_receipts_access_policy"
   on public.message_receipts for all
   to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using (true)
+  with check (true);
 
 -- Trigger para actualizar last_activity_at en conversations cuando llega un mensaje
 create or replace function public.update_conversation_last_activity()
