@@ -110,22 +110,26 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   }
 
   void _showAvatarPicker() {
-    // Galería Inclusiva y Diversa (Múltiples tonalidades de piel, identidades, afros, géneros y etnias)
-    final inclusiveAvatars = [
-      // Diversidad Afrodescendiente & Piel Oscura
-      'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150', // Mujer afrodescendiente
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', // Hombre afrodescendiente
-      'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150', // Joven piel oscura
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', // Mujer afro con trenzas
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', // Hombre piel morena / oscura
-      // Diversidad Latina e Indígena
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150', // Mujer latina
-      'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150', // Hombre latino
-      'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150', // Joven diversa
-      // Diversidad Asiática & Global
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150', // Joven asiático
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', // Mujer asiática
-      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', // Hombre global
+    // 1. Comunidad Afrodescendiente & Piel Oscura (Prominente)
+    final afroAvatars = [
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80', // Mujer afro con recogido
+      'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=250&q=80', // Mujer afrodescendiente
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80', // Hombre afrodescendiente sonriente
+      'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=250&q=80', // Joven piel oscura
+      'https://images.unsplash.com/photo-1589156280159-27698a70f29e?auto=format&fit=crop&w=250&q=80', // Mujer afro con trenzas
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=250&q=80', // Mujer profesional afro
+      'https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?auto=format&fit=crop&w=250&q=80', // Hombre afrodescendiente
+      'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=250&q=80', // Retrato mujer piel oscura
+    ];
+
+    // 2. Diversidad Global (Latina, Indígena, Asiática y Medio Oriente)
+    final globalAvatars = [
+      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=250&q=80', // Mujer latina
+      'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=250&q=80', // Hombre latino
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80', // Hombre piel morena
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80', // Mujer asiática
+      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=250&q=80', // Retrato global
+      'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=250&q=80', // Joven diversa
     ];
 
     showModalBottomSheet<void>(
@@ -135,12 +139,26 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (context, scrollController) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
           children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Expanded(
@@ -148,12 +166,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Foto y Avatar de Perfil',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        'Foto y Avatar Inclusivo',
+                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Elige una foto real o un avatar inclusivo.',
+                        'Cámara, galería o avatares diversos.',
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ],
@@ -167,7 +185,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             ),
             const SizedBox(height: 18),
 
-            // Acciones directas del teléfono: Galería y Cámara
+            // Opciones de foto real
             Row(
               children: [
                 Expanded(
@@ -202,37 +220,73 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               ],
             ),
 
-            const SizedBox(height: 22),
-            const Text(
-              'Avatares Inclusivos y Diversos:',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+            const SizedBox(height: 24),
+
+            // SECCIÓN 1: Afrodescendientes y Piel Oscura
+            const Row(
+              children: [
+                Text(
+                  '✊🏾 Avatares Afrodescendientes & Piel Oscura',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.amberAccent),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-
             SizedBox(
-              height: 72,
+              height: 76,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: inclusiveAvatars.length,
+                itemCount: afroAvatars.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, idx) {
-                  final url = inclusiveAvatars[idx];
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(36),
+                  final url = afroAvatars[idx];
+                  return _AvatarOptionCircle(
+                    imageUrl: url,
+                    isSelected: _avatarUrl == url,
                     onTap: () {
                       setState(() => _avatarUrl = url);
                       Navigator.of(ctx).pop();
                     },
-                    child: CircleAvatar(
-                      radius: 34,
-                      backgroundColor: AppColors.surfaceRaised,
-                      backgroundImage: NetworkImage(url),
-                    ),
                   );
                 },
               ),
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 22),
+
+            // SECCIÓN 2: Diversidad Global
+            const Row(
+              children: [
+                Text(
+                  '🌎 Diversidad Latina, Indígena y Global',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 76,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: globalAvatars.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, idx) {
+                  final url = globalAvatars[idx];
+                  return _AvatarOptionCircle(
+                    imageUrl: url,
+                    isSelected: _avatarUrl == url,
+                    onTap: () {
+                      setState(() => _avatarUrl = url);
+                      Navigator.of(ctx).pop();
+                    },
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Botones secundarios
             Row(
               children: [
                 Expanded(
@@ -466,6 +520,64 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _AvatarOptionCircle extends StatelessWidget {
+  const _AvatarOptionCircle({
+    required this.imageUrl,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String imageUrl;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(38),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            width: 2.5,
+          ),
+        ),
+        child: ClipOval(
+          child: SizedBox(
+            width: 68,
+            height: 68,
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  color: AppColors.surfaceRaised,
+                  child: const Center(
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: AppColors.surfaceRaised,
+                  child: const Icon(Icons.person_rounded, color: AppColors.textSecondary),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
