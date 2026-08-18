@@ -44,11 +44,12 @@ class _NewConversationPageState extends State<NewConversationPage> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo iniciar la conversación.'),
+        SnackBar(
+          content: Text(clean.isNotEmpty ? clean : 'No se pudo iniciar la conversación.'),
           backgroundColor: AppColors.error,
         ),
       );

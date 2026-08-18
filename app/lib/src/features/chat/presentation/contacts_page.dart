@@ -106,11 +106,12 @@ class _ContactsPageState extends State<ContactsPage> {
         ),
       );
       _loadData();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo abrir la conversación.'),
+        SnackBar(
+          content: Text(clean.isNotEmpty ? clean : 'No se pudo abrir la conversación.'),
           backgroundColor: AppColors.error,
         ),
       );

@@ -547,11 +547,16 @@ class ChatService {
 
         final senderId = req['sender_id'] as String;
         final receiverId = req['receiver_id'] as String;
+        final targetContactId = _userId == receiverId ? senderId : receiverId;
 
-        await _client.from('contacts').upsert([
-          {'user_id': receiverId, 'contact_user_id': senderId},
-          {'user_id': senderId, 'contact_user_id': receiverId},
-        ]);
+        try {
+          await _client.from('contacts').upsert({
+            'user_id': _userId,
+            'contact_user_id': targetContactId,
+            'circle_category': 'general',
+          });
+        } catch (_) {}
+
         return true;
       }
     } catch (_) {}
@@ -591,7 +596,9 @@ class ChatService {
         'create_direct_conversation',
         params: {'other_user_id': otherUserId},
       );
-      if (result != null) return result as String;
+      if (result != null && result.toString().isNotEmpty) {
+        return result.toString();
+      }
     } catch (_) {}
 
     try {
@@ -640,7 +647,8 @@ class ChatService {
 
       return convId;
     } catch (e) {
-      throw Exception('Error al crear conversación: $e');
+      final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
+      throw Exception(clean.isNotEmpty ? clean : 'Error al conectar con el usuario');
     }
   }
 
