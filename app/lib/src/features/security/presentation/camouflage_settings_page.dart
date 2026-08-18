@@ -225,9 +225,28 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
           const Divider(height: 24),
           ListTile(
             leading: const Icon(Icons.pin_rounded, color: AppColors.primary),
-            title: const Text('PIN secreto de salida'),
-            subtitle: Text(isDefault ? 'Por defecto (1234)' : 'Personalizado (${"•" * _pin.length})'),
-            trailing: OutlinedButton(
+            title: Row(
+              children: [
+                const Text('PIN secreto de salida'),
+                if (isDefault) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: Text(
+              isDefault ? '⚠️ Por defecto (1234) - Toca para cambiar' : 'Personalizado (${"•" * _pin.length})',
+              style: TextStyle(color: isDefault ? Colors.amberAccent : null),
+            ),
+            trailing: FilledButton(
+              style: isDefault ? FilledButton.styleFrom(backgroundColor: AppColors.error) : null,
               onPressed: _showChangePinDialog,
               child: const Text('Cambiar'),
             ),

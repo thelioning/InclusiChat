@@ -405,38 +405,65 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Center(
-                          child: InkWell(
-                            onTap: _showAvatarPicker,
-                            borderRadius: BorderRadius.circular(46),
-                            child: Stack(
-                              children: [
-                                CircleAvatar(
-                                  radius: 46,
-                                  backgroundColor: AppColors.secondary,
-                                  backgroundImage: _getAvatarProvider(_avatarUrl),
-                                  child: _avatarUrl == null
-                                      ? Text(
-                                          _nameController.text.isNotEmpty
-                                              ? _nameController.text.characters.first.toUpperCase()
-                                              : 'U',
-                                          style: const TextStyle(fontSize: 34, color: Colors.white, fontWeight: FontWeight.bold),
-                                        )
-                                      : null,
-                                ),
-                                Positioned(
-                                  bottom: 0,
-                                  right: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primary,
-                                      shape: BoxShape.circle,
+                          child: Column(
+                            children: [
+                              InkWell(
+                                onTap: _showAvatarPicker,
+                                borderRadius: BorderRadius.circular(46),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 46,
+                                      backgroundColor: AppColors.secondary,
+                                      backgroundImage: _getAvatarProvider(_avatarUrl),
+                                      child: _avatarUrl == null
+                                          ? Text(
+                                              _nameController.text.isNotEmpty
+                                                  ? _nameController.text.characters.first.toUpperCase()
+                                                  : 'U',
+                                              style: const TextStyle(fontSize: 34, color: Colors.white, fontWeight: FontWeight.bold),
+                                            )
+                                          : null,
                                     ),
-                                    child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
-                                  ),
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.primary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                                      ),
+                                    ),
+                                    if (_avatarUrl == null || _avatarUrl!.isEmpty)
+                                      Positioned(
+                                        top: -2,
+                                        right: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.error,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: AppColors.surface, width: 2),
+                                          ),
+                                          child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (_avatarUrl == null || _avatarUrl!.isEmpty) ...[
+                                const SizedBox(height: 10),
+                                TextButton.icon(
+                                  onPressed: _showAvatarPicker,
+                                  icon: const Icon(Icons.add_a_photo_outlined, size: 16, color: AppColors.primary),
+                                  label: const Text('Elegir foto o avatar de perfil', style: TextStyle(fontSize: 13)),
                                 ),
                               ],
-                            ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 24),

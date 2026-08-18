@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ConversationSummary {
@@ -89,6 +90,7 @@ class ChatService {
     : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+  static final currentUserProfileNotifier = ValueNotifier<UserProfileData?>(null);
 
   String get _userId {
     final id = _client.auth.currentUser?.id;
@@ -109,14 +111,16 @@ class ChatService {
       final user = _client.auth.currentUser;
       final rawName = user?.userMetadata?['display_name'] as String? ?? 'Usuario';
       final rawUsername = user?.userMetadata?['username'] as String? ?? 'user_${_userId.substring(0, 6)}';
-      return UserProfileData(
+      final fallbackProfile = UserProfileData(
         id: _userId,
         displayName: rawName,
         username: rawUsername,
       );
+      currentUserProfileNotifier.value = fallbackProfile;
+      return fallbackProfile;
     }
 
-    return UserProfileData(
+    final profile = UserProfileData(
       id: row['id'] as String,
       displayName: row['display_name'] as String? ?? 'Usuario',
       username: row['username'] as String? ?? '',
@@ -125,6 +129,8 @@ class ChatService {
       pronouns: row['pronouns'] as String?,
       isVerified: row['is_verified'] as bool? ?? false,
     );
+    currentUserProfileNotifier.value = profile;
+    return profile;
   }
 
   Future<void> updateUserProfile({
@@ -144,6 +150,16 @@ class ChatService {
       'avatar_url': avatarUrl,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     });
+
+    currentUserProfileNotifier.value = UserProfileData(
+      id: _userId,
+      displayName: displayName.trim(),
+      username: sanitizedUsername,
+      avatarUrl: avatarUrl,
+      bio: bio?.trim(),
+      pronouns: pronouns?.trim(),
+      isVerified: currentUserProfileNotifier.value?.isVerified ?? false,
+    );
   }
 
   Future<List<ConversationSummary>> loadConversations() async {

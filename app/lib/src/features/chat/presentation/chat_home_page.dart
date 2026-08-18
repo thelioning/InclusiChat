@@ -38,6 +38,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
   void initState() {
     super.initState();
     _conversations = _chatService.loadConversations();
+    _chatService.loadUserProfile();
   }
 
   Future<void> _reloadConversations() async {
@@ -64,11 +65,19 @@ class _ChatHomePageState extends State<ChatHomePage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: CamouflageService.instance,
+      listenable: Listenable.merge([
+        CamouflageService.instance,
+        ChatService.currentUserProfileNotifier,
+      ]),
       builder: (context, _) {
         if (CamouflageService.instance.isCamouflaged) {
           return const CamouflageScreen();
         }
+
+        final hasDefaultPin = CamouflageService.instance.isDefaultPin;
+        final profile = ChatService.currentUserProfileNotifier.value;
+        final hasMissingAvatar = (profile == null || profile.avatarUrl == null || profile.avatarUrl!.isEmpty);
+        final totalBadges = (hasDefaultPin ? 1 : 0) + (hasMissingAvatar ? 1 : 0);
 
         return Scaffold(
           appBar: AppBar(
@@ -106,23 +115,41 @@ class _ChatHomePageState extends State<ChatHomePage> {
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'profile',
                     child: Row(
                       children: [
-                        Icon(Icons.person_outline_rounded),
-                        SizedBox(width: 12),
-                        Text('Mi perfil'),
+                        const Icon(Icons.person_outline_rounded),
+                        const SizedBox(width: 12),
+                        const Expanded(child: Text('Mi perfil')),
+                        if (hasMissingAvatar)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: AppColors.error,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'camouflage',
                     child: Row(
                       children: [
-                        Icon(Icons.visibility_off_outlined),
-                        SizedBox(width: 12),
-                        Text('Camuflaje'),
+                        const Icon(Icons.visibility_off_outlined),
+                        const SizedBox(width: 12),
+                        const Expanded(child: Text('Camuflaje')),
+                        if (hasDefaultPin)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: AppColors.error,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
                       ],
                     ),
                   ),
@@ -159,7 +186,10 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 onFilterChanged: (value) => setState(() => _filter = value),
               ),
               const ContactsPage(),
-              const _SettingsSection(),
+              _SettingsSection(
+                hasDefaultPin: hasDefaultPin,
+                hasMissingAvatar: hasMissingAvatar,
+              ),
             ],
           ),
           floatingActionButton: _selectedIndex == 0
@@ -175,20 +205,32 @@ class _ChatHomePageState extends State<ChatHomePage> {
               setState(() => _selectedIndex = index);
               if (index == 0) _reloadConversations();
             },
-            destinations: const [
-              NavigationDestination(
+            destinations: [
+              const NavigationDestination(
                 icon: Icon(Icons.chat_bubble_outline_rounded),
                 selectedIcon: Icon(Icons.chat_bubble_rounded),
                 label: 'Chats',
               ),
-              NavigationDestination(
+              const NavigationDestination(
                 icon: Icon(Icons.people_outline_rounded),
                 selectedIcon: Icon(Icons.people_rounded),
                 label: 'Contactos',
               ),
               NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings_rounded),
+                icon: totalBadges > 0
+                    ? Badge.count(
+                        count: totalBadges,
+                        backgroundColor: AppColors.error,
+                        child: const Icon(Icons.settings_outlined),
+                      )
+                    : const Icon(Icons.settings_outlined),
+                selectedIcon: totalBadges > 0
+                    ? Badge.count(
+                        count: totalBadges,
+                        backgroundColor: AppColors.error,
+                        child: const Icon(Icons.settings_rounded),
+                      )
+                    : const Icon(Icons.settings_rounded),
                 label: 'Ajustes',
               ),
             ],
@@ -540,7 +582,13 @@ class _EmptySection extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection();
+  const _SettingsSection({
+    this.hasDefaultPin = false,
+    this.hasMissingAvatar = false,
+  });
+
+  final bool hasDefaultPin;
+  final bool hasMissingAvatar;
 
   @override
   Widget build(BuildContext context) {
@@ -550,7 +598,10 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.person_outline_rounded,
           title: 'Perfil e identidad',
-          subtitle: 'Nombre, foto, alias @usuario y pronombres',
+          subtitle: hasMissingAvatar
+              ? '⚠️ Foto de perfil pendiente (Toca para agregar)'
+              : 'Nombre, foto, alias @usuario y pronombres',
+          badgeCount: hasMissingAvatar ? 1 : null,
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
@@ -560,7 +611,10 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.visibility_off_outlined,
           title: 'Privacidad y camuflaje',
-          subtitle: 'Modo señuelo, botón de pánico y PIN secreto',
+          subtitle: hasDefaultPin
+              ? '⚠️ PIN secreto por defecto 1234 (Toca para cambiar)'
+              : 'Modo señuelo, botón de pánico y PIN secreto',
+          badgeCount: hasDefaultPin ? 1 : null,
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const CamouflageSettingsPage()),
@@ -658,6 +712,7 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.iconColor,
+    this.badgeCount,
     this.onTap,
   });
 
@@ -665,6 +720,7 @@ class _SettingsTile extends StatelessWidget {
   final Color? iconColor;
   final String title;
   final String subtitle;
+  final int? badgeCount;
   final VoidCallback? onTap;
 
   @override
@@ -682,12 +738,34 @@ class _SettingsTile extends StatelessWidget {
         ),
         child: Icon(icon, color: color),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: iconColor,
-        ),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: iconColor,
+              ),
+            ),
+          ),
+          if (badgeCount != null && badgeCount! > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.error,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$badgeCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
       ),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right_rounded),
