@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
@@ -32,82 +30,20 @@ class _ConversationPageState extends State<ConversationPage> {
   bool _showJumpToLatest = false;
   int _lastMessageCount = 0;
 
-  List<Map<String, dynamic>> _messages = [];
-  bool _loading = true;
-  Timer? _pollTimer;
-  StreamSubscription? _msgSub;
-  StreamSubscription? _receiptSub;
-  Map<String, String> _receiptStatus = {};
-
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onTextChanged);
     _scrollController.addListener(_onScroll);
-    _fetchMessages();
-    _subscribeRealtime();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchMessages(silent: true));
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
-    _msgSub?.cancel();
-    _receiptSub?.cancel();
     _controller.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScroll);
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  Future<void> _fetchMessages({bool silent = false}) async {
-    try {
-      final msgs = await _service.loadMessages(widget.conversationId);
-      if (!mounted) return;
-      setState(() {
-        _messages = msgs;
-        _loading = false;
-      });
-      _markIncomingMessagesRead(msgs);
-      _keepLatestMessageVisible(msgs.length);
-    } catch (_) {
-      if (!silent && mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  void _subscribeRealtime() {
-    try {
-      _msgSub = _service.watchMessages(widget.conversationId).listen((event) {
-        if (!mounted) return;
-        setState(() {
-          final sorted = [...event]
-            ..sort((a, b) => DateTime.parse(a['created_at'] as String)
-                .compareTo(DateTime.parse(b['created_at'] as String)));
-          _messages = sorted;
-          _loading = false;
-        });
-        _markIncomingMessagesRead(event);
-        _keepLatestMessageVisible(event.length);
-      }, onError: (_) {});
-    } catch (_) {}
-
-    try {
-      _receiptSub = _service.watchReceipts().listen((receipts) {
-        if (!mounted) return;
-        final map = <String, String>{};
-        for (final r in receipts) {
-          final mId = r['message_id'] as String;
-          final status = r['status'] as String;
-          if (status == 'read' || map[mId] == null) {
-            map[mId] = status;
-          }
-        }
-        setState(() => _receiptStatus = map);
-      }, onError: (_) {});
-    } catch (_) {}
   }
 
   void _onTextChanged() {
@@ -153,22 +89,6 @@ class _ConversationPageState extends State<ConversationPage> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     _controller.clear();
-
-    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
-    final tempMsg = {
-      'id': tempId,
-      'conversation_id': widget.conversationId,
-      'sender_id': _service.currentUserId,
-      'type': 'text',
-      'content': text,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-    };
-
-    setState(() {
-      _messages.add(tempMsg);
-    });
-    _keepLatestMessageVisible(_messages.length);
-
     try {
       await _service.sendTextMessage(
         conversationId: widget.conversationId,
@@ -176,11 +96,12 @@ class _ConversationPageState extends State<ConversationPage> {
       );
     } catch (e) {
       _controller.text = text;
-      setState(() {
-        _messages.removeWhere((m) => m['id'] == tempId);
-      });
       if (mounted) {
-        final cleanErr = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
+        final cleanErr = e.toString()
+            .replaceAll('Exception:', '')
+            .replaceAll('PostgrestException', '')
+            .replaceAll('(message:', '')
+            .trim();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(cleanErr.isNotEmpty ? cleanErr : 'No se pudo enviar el mensaje.'),
@@ -322,36 +243,73 @@ class _ConversationPageState extends State<ConversationPage> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _messages.isEmpty
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(32),
-                                child: Text(
-                                  'Esta conversación comienza aquí.\nEnvía un saludo seguro.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: AppColors.textSecondary),
-                                ),
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _service.watchMessages(widget.conversationId),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(
+                          child: Text('No se pudieron cargar los mensajes.'),
+                        );
+                      }
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final messages = [...snapshot.data!]
+                        ..sort(
+                          (a, b) => DateTime.parse(a['created_at'] as String)
+                              .compareTo(
+                                DateTime.parse(b['created_at'] as String),
                               ),
-                            )
-                          : ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-                              itemCount: _messages.length,
-                              itemBuilder: (context, index) {
-                                final message = _messages[index];
-                                final own = _service.isOwnMessage(message);
-                                return _MessageBubble(
-                                  content: message['content'] as String? ?? '',
-                                  own: own,
-                                  createdAt: DateTime.parse(
-                                    message['created_at'] as String,
-                                  ),
-                                  receiptStatus: _receiptStatus[message['id']],
-                                );
-                              },
+                        );
+                      _markIncomingMessagesRead(messages);
+                      _keepLatestMessageVisible(messages.length);
+                      if (messages.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: Text(
+                              'Esta conversación comienza aquí.\nEnvía un saludo seguro.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppColors.textSecondary),
                             ),
+                          ),
+                        );
+                      }
+                      return StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: _service.watchReceipts(),
+                        builder: (context, receiptSnapshot) {
+                          final receiptStatus = <String, String>{};
+                          for (final receipt
+                              in receiptSnapshot.data ??
+                                  const <Map<String, dynamic>>[]) {
+                            final messageId = receipt['message_id'] as String;
+                            final status = receipt['status'] as String;
+                            if (status == 'read' ||
+                                receiptStatus[messageId] == null) {
+                              receiptStatus[messageId] = status;
+                            }
+                          }
+                          return ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              final message = messages[index];
+                              final own = _service.isOwnMessage(message);
+                              return _MessageBubble(
+                                content: message['content'] as String? ?? '',
+                                own: own,
+                                createdAt: DateTime.parse(
+                                  message['created_at'] as String,
+                                ),
+                                receiptStatus: receiptStatus[message['id']],
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
                 if (_showJumpToLatest)
                   Positioned(
