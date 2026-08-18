@@ -632,6 +632,20 @@ class ChatService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> loadMessages(String conversationId) async {
+    try {
+      final rows = await _client
+          .from('messages')
+          .select('id,conversation_id,sender_id,type,content,created_at,metadata,is_deleted')
+          .eq('conversation_id', conversationId)
+          .eq('is_deleted', false)
+          .order('created_at', ascending: true);
+      return List<Map<String, dynamic>>.from(rows as List);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Stream<List<Map<String, dynamic>>> watchMessages(String conversationId) {
     return _client
         .from('messages')
@@ -662,6 +676,15 @@ class ChatService {
   }) async {
     final text = content.trim();
     if (text.isEmpty) return;
+
+    try {
+      await _client.from('conversation_participants').upsert({
+        'conversation_id': conversationId,
+        'user_id': _userId,
+        'role': 'member',
+      }, onConflict: 'conversation_id,user_id');
+    } catch (_) {}
+
     await _client.from('messages').insert({
       'conversation_id': conversationId,
       'sender_id': _userId,
