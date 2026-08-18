@@ -174,7 +174,6 @@ class _ConversationPageState extends State<ConversationPage> {
         conversationId: widget.conversationId,
         content: text,
       );
-      await _fetchMessages(silent: true);
     } catch (e) {
       _controller.text = text;
       setState(() {

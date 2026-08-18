@@ -425,7 +425,7 @@ class ChatService {
         return {'success': false, 'message': 'No puedes agregarte a ti mismo.'};
       }
 
-      // Verificar si ya son contactos
+      // 1. Verificar si ya son contactos directos
       final existingContact = await _client
           .from('contacts')
           .select('contact_user_id')
@@ -437,18 +437,31 @@ class ChatService {
         return {'success': false, 'message': 'Este usuario ya está en tus contactos.'};
       }
 
-      // Insertar o actualizar solicitud
-      try {
-        await _client.from('contact_requests').insert({
-          'sender_id': _userId,
-          'receiver_id': targetId,
-          'status': 'pending',
-        });
-      } catch (_) {
-        await _client.from('contact_requests').update({
-          'status': 'pending',
-        }).eq('sender_id', _userId).eq('receiver_id', targetId);
+      // 2. Verificar si ya existe una solicitud registrada entre ambos
+      final existingReq = await _client
+          .from('contact_requests')
+          .select('id,sender_id,receiver_id,status')
+          .or('and(sender_id.eq.$_userId,receiver_id.eq.$targetId),and(sender_id.eq.$targetId,receiver_id.eq.$_userId)')
+          .maybeSingle();
+
+      if (existingReq != null) {
+        final status = existingReq['status'] as String? ?? 'pending';
+        final senderId = existingReq['sender_id'] as String;
+        if (status == 'accepted') {
+          return {'success': false, 'message': '@$targetUName ya forma parte de tus contactos.'};
+        } else if (senderId == _userId) {
+          return {'success': false, 'message': 'Ya enviaste una solicitud a @$targetUName. Está pendiente de aprobación.'};
+        } else {
+          return {'success': false, 'message': '@$targetUName ya te envió una solicitud. Revisa la sección de solicitudes para aceptarla.'};
+        }
       }
+
+      // 3. Insertar nueva solicitud
+      await _client.from('contact_requests').insert({
+        'sender_id': _userId,
+        'receiver_id': targetId,
+        'status': 'pending',
+      });
 
       return {
         'success': true,
@@ -676,20 +689,12 @@ class ChatService {
     final text = content.trim();
     if (text.isEmpty) return;
 
-    try {
-      await _client.from('conversation_participants').upsert({
-        'conversation_id': conversationId,
-        'user_id': _userId,
-        'role': 'member',
-      }, onConflict: 'conversation_id,user_id').timeout(const Duration(seconds: 4));
-    } catch (_) {}
-
     await _client.from('messages').insert({
       'conversation_id': conversationId,
       'sender_id': _userId,
       'type': 'text',
       'content': text,
-    }).timeout(const Duration(seconds: 8));
+    });
   }
 
   bool isOwnMessage(Map<String, dynamic> message) =>
