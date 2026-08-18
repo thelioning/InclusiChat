@@ -265,16 +265,20 @@ class ChatService {
   Future<List<ContactProfile>> loadContacts() async {
     final rows = await _client
         .from('contacts')
-        .select('contact_user_id,circle_category')
-        .eq('user_id', _userId);
+        .select('user_id,contact_user_id,circle_category')
+        .or('user_id.eq.$_userId,contact_user_id.eq.$_userId');
+
     final ids = rows
-        .map<String>((row) => row['contact_user_id'] as String)
+        .map<String>((row) => (row['user_id'] == _userId ? row['contact_user_id'] : row['user_id']) as String)
+        .where((id) => id != _userId)
+        .toSet()
         .toList();
+
     if (ids.isEmpty) return const [];
     
     final categoryById = {
       for (final r in rows)
-        r['contact_user_id'] as String: r['circle_category'] as String? ?? 'general',
+        (r['user_id'] == _userId ? r['contact_user_id'] : r['user_id']) as String: r['circle_category'] as String? ?? 'general',
     };
 
     final profiles = await _client

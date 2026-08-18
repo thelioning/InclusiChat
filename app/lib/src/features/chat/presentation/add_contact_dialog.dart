@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
-
 import '../data/invite_service.dart';
+import 'conversation_page.dart';
 
 class AddContactDialog extends StatefulWidget {
   const AddContactDialog({super.key});
@@ -204,6 +204,23 @@ class _AddContactDialogState extends State<AddContactDialog> {
                           final profile = _searchResults[index];
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
+                            onTap: () async {
+                              Navigator.of(context).pop(true);
+                              try {
+                                final convId = await _chatService.createDirectConversation(profile.id);
+                                if (context.mounted) {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => ConversationPage(
+                                        conversationId: convId,
+                                        title: profile.displayName,
+                                        avatarUrl: profile.avatarUrl,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } catch (_) {}
+                            },
                             leading: CircleAvatar(
                               backgroundColor: AppColors.secondary,
                               backgroundImage: profile.avatarUrl != null
@@ -229,7 +246,7 @@ class _AddContactDialogState extends State<AddContactDialog> {
                                 ],
                               ],
                             ),
-                            subtitle: Text('@${profile.username ?? ''}'),
+                            subtitle: Text('@${profile.username ?? ''} • Toca para chatear'),
                             trailing: OutlinedButton.icon(
                               onPressed: _isSending ? null : () => _sendRequest(profile),
                               icon: const Icon(Icons.send_rounded, size: 16),
