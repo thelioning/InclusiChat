@@ -163,146 +163,165 @@ class ChatService {
   }
 
   Future<List<ConversationSummary>> loadConversations() async {
-    final membershipRows = await _client
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', _userId)
-        .isFilter('left_at', null);
-    final ids = membershipRows
-        .map<String>((row) => row['conversation_id'] as String)
-        .toList();
-    if (ids.isEmpty) return const [];
+    try {
+      final membershipRows = await _client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', _userId)
+          .isFilter('left_at', null);
+      final ids = (membershipRows as List)
+          .map<String>((row) => row['conversation_id'] as String)
+          .toList();
+      if (ids.isEmpty) return const [];
 
-    final conversationRows = await _client
-        .from('conversations')
-        .select()
-        .inFilter('id', ids)
-        .order('last_activity_at', ascending: false);
-    final participantRows = await _client
-        .from('conversation_participants')
-        .select('conversation_id,user_id')
-        .inFilter('conversation_id', ids)
-        .neq('user_id', _userId)
-        .isFilter('left_at', null);
-    final otherUserIds = participantRows
-        .map<String>((row) => row['user_id'] as String)
-        .toSet()
-        .toList();
-    final profileRows = otherUserIds.isEmpty
-        ? <Map<String, dynamic>>[]
-        : await _client
-            .from('profiles')
-            .select('id,display_name,username,avatar_url')
-            .inFilter('id', otherUserIds);
-    final profiles = {for (final row in profileRows) row['id'] as String: row};
-    final partnerByConversation = {
-      for (final row in participantRows)
-        row['conversation_id'] as String: profiles[row['user_id']],
-    };
+      final conversationRows = await _client
+          .from('conversations')
+          .select()
+          .inFilter('id', ids)
+          .order('last_activity_at', ascending: false);
+      final participantRows = await _client
+          .from('conversation_participants')
+          .select('conversation_id,user_id')
+          .inFilter('conversation_id', ids)
+          .neq('user_id', _userId)
+          .isFilter('left_at', null);
+      final otherUserIds = (participantRows as List)
+          .map<String>((row) => row['user_id'] as String)
+          .toSet()
+          .toList();
+      final profileRows = otherUserIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : await _client
+              .from('profiles')
+              .select('id,display_name,username,avatar_url')
+              .inFilter('id', otherUserIds);
+      final profiles = {for (final row in (profileRows as List)) row['id'] as String: row};
+      final partnerByConversation = {
+        for (final row in participantRows)
+          row['conversation_id'] as String: profiles[row['user_id']],
+      };
 
-    final messageRows = await _client
-        .from('messages')
-        .select('id,conversation_id,sender_id,content,created_at')
-        .inFilter('conversation_id', ids)
-        .eq('is_deleted', false)
-        .order('created_at', ascending: false);
-    final latestMessage = <String, String?>{};
-    for (final row in messageRows) {
-      latestMessage.putIfAbsent(
-        row['conversation_id'] as String,
-        () => row['content'] as String?,
-      );
-    }
-    final incomingMessageIds = messageRows
-        .where((row) => row['sender_id'] != _userId)
-        .map<String>((row) => row['id'] as String)
-        .toList();
-    final receiptRows = incomingMessageIds.isEmpty
-        ? <Map<String, dynamic>>[]
-        : await _client
-            .from('message_receipts')
-            .select('message_id,status')
-            .eq('user_id', _userId)
-            .inFilter('message_id', incomingMessageIds);
-    final readMessageIds = receiptRows
-        .where((row) => row['status'] == 'read')
-        .map<String>((row) => row['message_id'] as String)
-        .toSet();
-    final unreadByConversation = <String, int>{};
-    for (final row in messageRows) {
-      final messageId = row['id'] as String;
-      if (row['sender_id'] != _userId && !readMessageIds.contains(messageId)) {
-        final conversationId = row['conversation_id'] as String;
-        unreadByConversation.update(
-          conversationId,
-          (count) => count + 1,
-          ifAbsent: () => 1,
+      final messageRows = await _client
+          .from('messages')
+          .select('id,conversation_id,sender_id,content,created_at')
+          .inFilter('conversation_id', ids)
+          .eq('is_deleted', false)
+          .order('created_at', ascending: false);
+      final latestMessage = <String, String?>{};
+      for (final row in (messageRows as List)) {
+        latestMessage.putIfAbsent(
+          row['conversation_id'] as String,
+          () => row['content'] as String?,
         );
       }
-    }
+      final incomingMessageIds = (messageRows as List)
+          .where((row) => row['sender_id'] != _userId)
+          .map<String>((row) => row['id'] as String)
+          .toList();
+      final receiptRows = incomingMessageIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : await _client
+              .from('message_receipts')
+              .select('message_id,status')
+              .eq('user_id', _userId)
+              .inFilter('message_id', incomingMessageIds);
+      final readMessageIds = (receiptRows as List)
+          .where((row) => row['status'] == 'read')
+          .map<String>((row) => row['message_id'] as String)
+          .toSet();
+      final unreadByConversation = <String, int>{};
+      for (final row in messageRows) {
+        final messageId = row['id'] as String;
+        if (row['sender_id'] != _userId && !readMessageIds.contains(messageId)) {
+          final conversationId = row['conversation_id'] as String;
+          unreadByConversation.update(
+            conversationId,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+        }
+      }
 
-    return conversationRows.map((row) {
-      final id = row['id'] as String;
-      final partner = partnerByConversation[id];
-      final customTitle = (row['title'] as String?)?.trim();
-      final partnerName = (partner?['display_name'] as String?)?.trim();
-      return ConversationSummary(
-        id: id,
-        type: row['type'] as String? ?? 'direct',
-        title: customTitle?.isNotEmpty == true
-            ? customTitle!
-            : partnerName?.isNotEmpty == true
-            ? partnerName!
-            : 'Conversación',
-        avatarUrl: (row['avatar_url'] ?? partner?['avatar_url']) as String?,
-        lastMessage: latestMessage[id],
-        unreadCount: unreadByConversation[id] ?? 0,
-        lastActivityAt: DateTime.parse(row['last_activity_at'] as String),
-      );
-    }).toList();
+      return (conversationRows as List).map((row) {
+        final id = row['id'] as String;
+        final partner = partnerByConversation[id];
+        final customTitle = (row['title'] as String?)?.trim();
+        final partnerName = (partner?['display_name'] as String?)?.trim();
+        return ConversationSummary(
+          id: id,
+          type: row['type'] as String? ?? 'direct',
+          title: customTitle?.isNotEmpty == true
+              ? customTitle!
+              : partnerName?.isNotEmpty == true
+              ? partnerName!
+              : 'Conversación',
+          avatarUrl: (row['avatar_url'] ?? partner?['avatar_url']) as String?,
+          lastMessage: latestMessage[id],
+          unreadCount: unreadByConversation[id] ?? 0,
+          lastActivityAt: DateTime.parse(row['last_activity_at'] as String),
+        );
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<ContactProfile>> loadContacts() async {
-    final rows = await _client
-        .from('contacts')
-        .select('user_id,contact_user_id,circle_category')
-        .or('user_id.eq.$_userId,contact_user_id.eq.$_userId');
+    try {
+      final contactRows = await _client
+          .from('contacts')
+          .select('contact_user_id,circle_category')
+          .eq('user_id', _userId);
 
-    final ids = rows
-        .map<String>((row) => (row['user_id'] == _userId ? row['contact_user_id'] : row['user_id']) as String)
-        .where((id) => id != _userId)
-        .toSet()
-        .toList();
+      final acceptedReqRows = await _client
+          .from('contact_requests')
+          .select('sender_id,receiver_id')
+          .or('sender_id.eq.$_userId,receiver_id.eq.$_userId')
+          .eq('status', 'accepted');
 
-    if (ids.isEmpty) return const [];
-    
-    final categoryById = {
-      for (final r in rows)
-        (r['user_id'] == _userId ? r['contact_user_id'] : r['user_id']) as String: r['circle_category'] as String? ?? 'general',
-    };
+      final idsFromContacts = (contactRows as List)
+          .map<String>((r) => r['contact_user_id'] as String);
 
-    final profiles = await _client
-        .from('profiles')
-        .select('id,display_name,username,avatar_url,bio,pronouns,is_verified')
-        .inFilter('id', ids)
-        .order('display_name');
-    return profiles
-        .map(
-          (row) => ContactProfile(
-            id: row['id'] as String,
-            displayName:
-                (row['display_name'] as String?)?.trim().isNotEmpty == true
-                ? row['display_name'] as String
-                : 'Usuario de InclusiChat',
-            username: row['username'] as String?,
-            avatarUrl: row['avatar_url'] as String?,
-            bio: row['bio'] as String?,
-            pronouns: row['pronouns'] as String?,
-            isVerified: row['is_verified'] as bool? ?? false,
-            circleCategory: categoryById[row['id']] ?? 'general',
-          ),
-        )
-        .toList();
+      final idsFromReqs = (acceptedReqRows as List)
+          .map<String>((r) => (r['sender_id'] == _userId ? r['receiver_id'] : r['sender_id']) as String);
+
+      final allIds = {...idsFromContacts, ...idsFromReqs}
+          .where((id) => id != _userId)
+          .toList();
+
+      if (allIds.isEmpty) return const [];
+
+      final categoryById = {
+        for (final r in contactRows)
+          r['contact_user_id'] as String: r['circle_category'] as String? ?? 'general',
+      };
+
+      final profiles = await _client
+          .from('profiles')
+          .select('id,display_name,username,avatar_url,bio,pronouns,is_verified')
+          .inFilter('id', allIds)
+          .order('display_name');
+
+      return (profiles as List)
+          .map(
+            (row) => ContactProfile(
+              id: row['id'] as String,
+              displayName:
+                  (row['display_name'] as String?)?.trim().isNotEmpty == true
+                  ? row['display_name'] as String
+                  : 'Usuario de InclusiChat',
+              username: row['username'] as String?,
+              avatarUrl: row['avatar_url'] as String?,
+              bio: row['bio'] as String?,
+              pronouns: row['pronouns'] as String?,
+              isVerified: row['is_verified'] as bool? ?? false,
+              circleCategory: categoryById[row['id']] ?? 'general',
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<ContactProfile>> searchProfiles(String query) async {
@@ -540,6 +559,30 @@ class ChatService {
     } catch (_) {}
 
     try {
+      final myParts = await _client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', _userId)
+          .isFilter('left_at', null);
+
+      final myConvIds = (myParts as List)
+          .map<String>((r) => r['conversation_id'] as String)
+          .toList();
+
+      if (myConvIds.isNotEmpty) {
+        final otherParts = await _client
+            .from('conversation_participants')
+            .select('conversation_id')
+            .eq('user_id', otherUserId)
+            .inFilter('conversation_id', myConvIds)
+            .isFilter('left_at', null)
+            .limit(1);
+
+        if ((otherParts as List).isNotEmpty) {
+          return otherParts.first['conversation_id'] as String;
+        }
+      }
+
       final conv = await _client.from('conversations').insert({
         'type': 'direct',
         'created_by': _userId,
