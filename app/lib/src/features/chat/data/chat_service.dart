@@ -382,7 +382,7 @@ class ChatService {
       // Verificar si ya son contactos
       final existingContact = await _client
           .from('contacts')
-          .select('id')
+          .select('contact_user_id')
           .eq('user_id', _userId)
           .eq('contact_user_id', targetId)
           .maybeSingle();
