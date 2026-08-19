@@ -267,18 +267,43 @@ class ChatService {
   }
 
   Future<List<ContactProfile>> loadContacts() async {
+    final allIds = <String>{};
+    final categoryById = <String, String>{};
+
+    // 1. Contactos guardados en la tabla contacts
     try {
       final contactRows = await _client
           .from('contacts')
           .select('contact_user_id,circle_category')
           .eq('user_id', _userId);
+      for (final r in (contactRows as List)) {
+        final cid = r['contact_user_id'] as String?;
+        if (cid != null && cid != _userId) {
+          allIds.add(cid);
+          categoryById[cid] = r['circle_category'] as String? ?? 'general';
+        }
+      }
+    } catch (_) {}
 
-      final allReqRows = await _client
+    // 2. Solicitudes de contacto mutuas aceptadas
+    try {
+      final acceptedReqs = await _client
           .from('contact_requests')
           .select('sender_id,receiver_id')
+          .eq('status', 'accepted')
           .or('sender_id.eq.$_userId,receiver_id.eq.$_userId');
+      for (final r in (acceptedReqs as List)) {
+        final sid = r['sender_id'] as String;
+        final rid = r['receiver_id'] as String;
+        final otherId = sid == _userId ? rid : sid;
+        if (otherId != _userId) {
+          allIds.add(otherId);
+        }
+      }
+    } catch (_) {}
 
-      // También incluir compañeros de conversaciones activas
+    // 3. Participantes de todas tus conversaciones activas (autodescubrimiento)
+    try {
       final myPartRows = await _client
           .from('conversation_participants')
           .select('conversation_id')
@@ -289,7 +314,6 @@ class ChatService {
           .map<String>((r) => r['conversation_id'] as String)
           .toList();
 
-      List<String> partnerUserIds = [];
       if (myConvIds.isNotEmpty) {
         final otherPartRows = await _client
             .from('conversation_participants')
@@ -297,51 +321,39 @@ class ChatService {
             .inFilter('conversation_id', myConvIds)
             .neq('user_id', _userId)
             .isFilter('left_at', null);
-        partnerUserIds = (otherPartRows as List)
-            .map<String>((r) => r['user_id'] as String)
-            .toList();
+        for (final r in (otherPartRows as List)) {
+          final uid = r['user_id'] as String?;
+          if (uid != null && uid != _userId) {
+            allIds.add(uid);
+          }
+        }
       }
+    } catch (_) {}
 
-      final idsFromContacts = (contactRows as List)
-          .map<String>((r) => r['contact_user_id'] as String);
+    if (allIds.isEmpty) return const [];
 
-      final idsFromReqs = (allReqRows as List)
-          .map<String>((r) => (r['sender_id'] == _userId ? r['receiver_id'] : r['sender_id']) as String);
-
-      final allIds = {...idsFromContacts, ...idsFromReqs, ...partnerUserIds}
-          .where((id) => id != _userId)
-          .toList();
-
-      if (allIds.isEmpty) return const [];
-
-      final categoryById = {
-        for (final r in contactRows)
-          r['contact_user_id'] as String: r['circle_category'] as String? ?? 'general',
-      };
-
+    try {
       final profiles = await _client
           .from('profiles')
           .select('id,display_name,username,avatar_url,bio,pronouns,is_verified')
-          .inFilter('id', allIds)
+          .inFilter('id', allIds.toList())
           .order('display_name');
 
-      return (profiles as List)
-          .map(
-            (row) => ContactProfile(
-              id: row['id'] as String,
-              displayName:
-                  (row['display_name'] as String?)?.trim().isNotEmpty == true
-                  ? row['display_name'] as String
-                  : 'Usuario de InclusiChat',
-              username: row['username'] as String?,
-              avatarUrl: row['avatar_url'] as String?,
-              bio: row['bio'] as String?,
-              pronouns: row['pronouns'] as String?,
-              isVerified: row['is_verified'] as bool? ?? false,
-              circleCategory: categoryById[row['id']] ?? 'general',
-            ),
-          )
-          .toList();
+      return (profiles as List).map((row) {
+        final id = row['id'] as String;
+        return ContactProfile(
+          id: id,
+          displayName: (row['display_name'] as String?)?.trim().isNotEmpty == true
+              ? row['display_name'] as String
+              : 'Usuario de InclusiChat',
+          username: row['username'] as String?,
+          avatarUrl: row['avatar_url'] as String?,
+          bio: row['bio'] as String?,
+          pronouns: row['pronouns'] as String?,
+          isVerified: row['is_verified'] as bool? ?? false,
+          circleCategory: categoryById[id] ?? 'general',
+        );
+      }).toList();
     } catch (_) {
       return const [];
     }
