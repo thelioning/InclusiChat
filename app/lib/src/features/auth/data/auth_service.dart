@@ -24,12 +24,24 @@ class AuthService {
   Future<bool> isUsernameAvailable(String username) async {
     final sanitized = username.trim().toLowerCase().replaceAll('@', '');
     if (sanitized.isEmpty) return false;
-    final res = await _client
-        .from('profiles')
-        .select('id')
-        .eq('username', sanitized)
-        .maybeSingle();
-    return res == null;
+    try {
+      final res = await _client.rpc(
+        'check_username_available',
+        params: {'target_username': sanitized},
+      );
+      if (res != null) return res as bool;
+    } catch (_) {}
+
+    try {
+      final res = await _client
+          .from('profiles')
+          .select('id')
+          .eq('username', sanitized)
+          .maybeSingle();
+      return res == null;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<List<String>> generateUsernameSuggestions(String baseUsername) async {

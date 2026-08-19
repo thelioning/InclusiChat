@@ -207,6 +207,25 @@ class _RegisterPageState extends State<RegisterPage> {
     } on AuthException catch (error) {
       if (!mounted) return;
       final normalized = error.message.toLowerCase();
+      if (normalized.contains('alias de usuario ya está en uso') ||
+          normalized.contains('profiles_username_key') ||
+          normalized.contains('username')) {
+        final suggestions = await AuthService().generateUsernameSuggestions(username);
+        if (mounted) {
+          setState(() {
+            _usernameError = 'El alias @$username ya está en uso.';
+            _usernameSuggestions = suggestions;
+          });
+          _formKey.currentState?.validate();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('El alias @$username ya está registrado. Toca una de las sugerencias.'),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        }
+        return;
+      }
       final message = normalized.contains('already registered')
           ? 'Ya existe una cuenta con ese correo.'
           : normalized.contains('rate')
