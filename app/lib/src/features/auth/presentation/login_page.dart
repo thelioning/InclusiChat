@@ -52,14 +52,44 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on AuthException catch (error) {
       if (!mounted) return;
-      final message = switch (error.statusCode) {
-        '400' => 'Correo o contraseña incorrectos (${error.message}).',
-        '429' => 'Demasiados intentos. Espera un momento.',
-        _ => 'No pudimos iniciar sesión: ${error.message}',
-      };
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: AppColors.error),
-      );
+      final msg = error.message.toLowerCase();
+      final isInvalid = error.statusCode == '400' ||
+          msg.contains('invalid login credentials') ||
+          msg.contains('invalid credentials') ||
+          msg.contains('user not found');
+
+      if (isInvalid) {
+        final enteredEmail = _emailController.text.trim();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Este usuario o correo no existe o la contraseña es incorrecta.'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Crear cuenta',
+              textColor: Colors.white,
+              onPressed: () async {
+                final registeredEmail = await Navigator.of(context).push<String>(
+                  MaterialPageRoute<String>(
+                    builder: (_) => RegisterPage(initialEmail: enteredEmail),
+                  ),
+                );
+                if (registeredEmail != null && registeredEmail.isNotEmpty) {
+                  _emailController.text = registeredEmail;
+                  _passwordController.clear();
+                }
+              },
+            ),
+          ),
+        );
+      } else {
+        final message = error.statusCode == '429'
+            ? 'Demasiados intentos. Espera un momento.'
+            : 'No pudimos iniciar sesión: ${error.message}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.error),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -356,7 +386,7 @@ class _LoginPageState extends State<LoginPage> {
                             onPressed: () async {
                               final registeredEmail = await Navigator.of(context).push<String>(
                                 MaterialPageRoute<String>(
-                                  builder: (_) => const RegisterPage(),
+                                  builder: (_) => RegisterPage(initialEmail: _emailController.text.trim()),
                                 ),
                               );
                               if (registeredEmail != null && registeredEmail.isNotEmpty) {

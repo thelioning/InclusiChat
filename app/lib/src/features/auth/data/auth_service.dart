@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -21,13 +22,41 @@ class AuthService {
   }
 
   Future<bool> isUsernameAvailable(String username) async {
-    final sanitized = username.trim().toLowerCase();
+    final sanitized = username.trim().toLowerCase().replaceAll('@', '');
+    if (sanitized.isEmpty) return false;
     final res = await _client
         .from('profiles')
         .select('id')
         .eq('username', sanitized)
         .maybeSingle();
     return res == null;
+  }
+
+  Future<List<String>> generateUsernameSuggestions(String baseUsername) async {
+    final clean = baseUsername.trim().toLowerCase().replaceAll('@', '').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    if (clean.isEmpty) return [];
+
+    final suggestions = <String>[];
+    final random = Random();
+    final currentYear = DateTime.now().year;
+
+    final candidates = [
+      '${clean}_${random.nextInt(899) + 100}',
+      '$clean${random.nextInt(89) + 10}',
+      '${clean}_$currentYear',
+      '${clean}_chat',
+      '${clean}_rd',
+      '${clean}_vip',
+    ];
+
+    for (final candidate in candidates) {
+      if (suggestions.length >= 3) break;
+      if (await isUsernameAvailable(candidate)) {
+        suggestions.add(candidate);
+      }
+    }
+
+    return suggestions;
   }
 
   Future<AuthResponse> signUp({
