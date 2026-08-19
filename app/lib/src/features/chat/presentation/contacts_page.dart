@@ -17,22 +17,19 @@ class ContactsPage extends StatefulWidget {
 
 class _ContactsPageState extends State<ContactsPage> {
   final _chatService = ChatService();
-  late Future<List<ContactProfile>> _contactsFuture;
-  late Future<List<ContactRequestItem>> _requestsFuture;
+  List<ContactProfile> _contacts = [];
+  List<ContactRequestItem> _requests = [];
+  bool _isLoading = true;
+  String? _errorMessage;
   String _searchFilter = '';
   Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _fetchData(initial: true);
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) {
-        setState(() {
-          _requestsFuture = _chatService.loadContactRequests();
-          _contactsFuture = _chatService.loadContacts();
-        });
-      }
+      _fetchData(initial: false);
     });
   }
 
@@ -42,11 +39,34 @@ class _ContactsPageState extends State<ContactsPage> {
     super.dispose();
   }
 
-  void _loadData() {
-    setState(() {
-      _contactsFuture = _chatService.loadContacts();
-      _requestsFuture = _chatService.loadContactRequests();
-    });
+  Future<void> _fetchData({bool initial = false}) async {
+    if (initial && mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+    try {
+      final results = await Future.wait([
+        _chatService.loadContacts(),
+        _chatService.loadContactRequests(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _contacts = results[0] as List<ContactProfile>;
+          _requests = results[1] as List<ContactRequestItem>;
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
+      if (mounted && initial) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'No se pudieron cargar tus contactos.';
+        });
+      }
+    }
   }
 
   Future<void> _showAddContactDialog() async {
@@ -56,10 +76,10 @@ class _ContactsPageState extends State<ContactsPage> {
     );
     if (!mounted) return;
     if (result is ContactProfile) {
-      _loadData();
+      _fetchData(initial: false);
       _openChat(result);
     } else if (result != null) {
-      _loadData();
+      _fetchData(initial: false);
     }
   }
 
@@ -73,7 +93,7 @@ class _ContactsPageState extends State<ContactsPage> {
           backgroundColor: AppColors.success,
         ),
       );
-      _loadData();
+      _fetchData(initial: false);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -88,7 +108,7 @@ class _ContactsPageState extends State<ContactsPage> {
     final success = await _chatService.rejectContactRequest(request.id);
     if (!mounted) return;
     if (success) {
-      _loadData();
+      _fetchData(initial: false);
     }
   }
 
@@ -105,7 +125,7 @@ class _ContactsPageState extends State<ContactsPage> {
           ),
         ),
       );
-      _loadData();
+      _fetchData(initial: false);
     } catch (e) {
       if (!mounted) return;
       final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
@@ -147,7 +167,7 @@ class _ContactsPageState extends State<ContactsPage> {
             backgroundColor: AppColors.surfaceRaised,
           ),
         );
-        _loadData();
+        _fetchData(initial: false);
       }
     }
   }
@@ -155,7 +175,7 @@ class _ContactsPageState extends State<ContactsPage> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () async => _loadData(),
+      onRefresh: () => _fetchData(initial: false),
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -240,16 +260,15 @@ class _ContactsPageState extends State<ContactsPage> {
             ),
           ),
           // Sección de solicitudes pendientes
-          SliverToBoxAdapter(
-            child: FutureBuilder<List<ContactRequestItem>>(
-              future: _requestsFuture,
-              builder: (context, snapshot) {
-                final requests = snapshot.data ?? [];
-                final incoming = requests.where((r) => r.isIncoming).toList();
-                final outgoing = requests.where((r) => !r.isIncoming).toList();
-                if (incoming.isEmpty && outgoing.isEmpty) return const SizedBox.shrink();
-
-                return Column(
+          if (_requests.isNotEmpty) ...[
+            () {
+              final incoming = _requests.where((r) => r.isIncoming).toList();
+              final outgoing = _requests.where((r) => !r.isIncoming).toList();
+              if (incoming.isEmpty && outgoing.isEmpty) {
+                return const SliverToBoxAdapter(child: SizedBox.shrink());
+              }
+              return SliverToBoxAdapter(
+                child: Column(
                   children: [
                     if (incoming.isNotEmpty)
                       Container(
@@ -390,159 +409,155 @@ class _ContactsPageState extends State<ContactsPage> {
                         ),
                       ),
                   ],
-                );
-              },
-            ),
-          ),
+                ),
+              );
+            }(),
+          ],
           // Lista de contactos
-          FutureBuilder<List<ContactProfile>>(
-            future: _contactsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasError) {
-                return SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
+          if (_isLoading && _contacts.isEmpty)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_errorMessage != null && _contacts.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, size: 48),
+                    const SizedBox(height: 12),
+                    Text(_errorMessage!),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => _fetchData(initial: true),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else () {
+            final filtered = _searchFilter.isEmpty
+                ? _contacts
+                : _contacts.where((c) =>
+                    c.displayName.toLowerCase().contains(_searchFilter) ||
+                    (c.username != null && c.username!.toLowerCase().contains(_searchFilter))).toList();
+
+            if (filtered.isEmpty) {
+              return SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.cloud_off_rounded, size: 48),
-                        const SizedBox(height: 12),
-                        const Text('No se pudieron cargar tus contactos.'),
-                        const SizedBox(height: 12),
-                        OutlinedButton(onPressed: _loadData, child: const Text('Reintentar')),
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: const BoxDecoration(
+                            gradient: AppColors.brandGradient,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.people_outline_rounded, size: 40, color: Colors.white),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          _searchFilter.isEmpty ? 'Tu círculo está esperando' : 'Sin coincidencias',
+                          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _searchFilter.isEmpty
+                              ? 'Agrega personas usando su @alias único para construir tu espacio seguro.'
+                              : 'No se encontraron contactos con "$_searchFilter".',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.textSecondary),
+                        ),
+                        if (_searchFilter.isEmpty) ...[
+                          const SizedBox(height: 20),
+                          FilledButton.icon(
+                            onPressed: _showAddContactDialog,
+                            icon: const Icon(Icons.person_add_rounded),
+                            label: const Text('Agregar primer contacto'),
+                            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                );
-              }
-
-              final allContacts = snapshot.data ?? [];
-              final filtered = _searchFilter.isEmpty
-                  ? allContacts
-                  : allContacts.where((c) =>
-                      c.displayName.toLowerCase().contains(_searchFilter) ||
-                      (c.username != null && c.username!.toLowerCase().contains(_searchFilter))).toList();
-
-              if (filtered.isEmpty) {
-                return SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: const BoxDecoration(
-                              gradient: AppColors.brandGradient,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.people_outline_rounded, size: 40, color: Colors.white),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            _searchFilter.isEmpty ? 'Tu círculo está esperando' : 'Sin coincidencias',
-                            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _searchFilter.isEmpty
-                                ? 'Agrega personas usando su @alias único para construir tu espacio seguro.'
-                                : 'No se encontraron contactos con "$_searchFilter".',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: AppColors.textSecondary),
-                          ),
-                          if (_searchFilter.isEmpty) ...[
-                            const SizedBox(height: 20),
-                            FilledButton.icon(
-                              onPressed: _showAddContactDialog,
-                              icon: const Icon(Icons.person_add_rounded),
-                              label: const Text('Agregar primer contacto'),
-                              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              return SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final contact = filtered[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      leading: CircleAvatar(
-                        radius: 22,
-                        backgroundColor: AppColors.secondary,
-                        backgroundImage: contact.avatarUrl != null ? NetworkImage(contact.avatarUrl!) : null,
-                        child: contact.avatarUrl == null
-                            ? Text(
-                                contact.displayName.characters.first.toUpperCase(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                              )
-                            : null,
-                      ),
-                      title: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              contact.displayName,
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                            ),
-                          ),
-                          if (contact.isVerified) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.verified_rounded, size: 16, color: AppColors.primary),
-                          ],
-                        ],
-                      ),
-                      subtitle: contact.username != null ? Text('@${contact.username}') : null,
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Mensaje directo',
-                            icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
-                            onPressed: () => _openChat(contact),
-                          ),
-                          PopupMenuButton<String>(
-                            onSelected: (val) {
-                              if (val == 'remove') _confirmRemoveContact(contact);
-                            },
-                            itemBuilder: (ctx) => [
-                              const PopupMenuItem(
-                                value: 'remove',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.person_remove_outlined, color: AppColors.error),
-                                    SizedBox(width: 10),
-                                    Text('Eliminar contacto', style: TextStyle(color: AppColors.error)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      onTap: () => _openChat(contact),
-                    );
-                  },
-                  childCount: filtered.length,
                 ),
               );
-            },
-          ),
+            }
+
+            return SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final contact = filtered[index];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: AppColors.secondary,
+                      backgroundImage: contact.avatarUrl != null ? NetworkImage(contact.avatarUrl!) : null,
+                      child: contact.avatarUrl == null
+                          ? Text(
+                              contact.displayName.characters.first.toUpperCase(),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                            )
+                          : null,
+                    ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            contact.displayName,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                          ),
+                        ),
+                        if (contact.isVerified) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.verified_rounded, size: 16, color: AppColors.primary),
+                        ],
+                      ],
+                    ),
+                    subtitle: contact.username != null ? Text('@${contact.username}') : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Mensaje directo',
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
+                          onPressed: () => _openChat(contact),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (val) {
+                            if (val == 'remove') _confirmRemoveContact(contact);
+                          },
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(
+                              value: 'remove',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.person_remove_outlined, color: AppColors.error),
+                                  SizedBox(width: 10),
+                                  Text('Eliminar contacto', style: TextStyle(color: AppColors.error)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    onTap: () => _openChat(contact),
+                  );
+                },
+                childCount: filtered.length,
+              ),
+            );
+          }(),
         ],
       ),
     );

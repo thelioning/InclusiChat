@@ -33,7 +33,8 @@ class _ChatHomePageState extends State<ChatHomePage> {
   String _searchQuery = '';
   _ConversationFilter _filter = _ConversationFilter.all;
   final _chatService = ChatService();
-  late Future<List<ConversationSummary>> _conversations;
+  List<ConversationSummary> _conversations = [];
+  bool _isConversationsLoading = true;
   int _pendingRequestsCount = 0;
   int _totalUnreadCount = 0;
   List<ContactRequestItem> _incomingRequests = [];
@@ -44,10 +45,9 @@ class _ChatHomePageState extends State<ChatHomePage> {
   @override
   void initState() {
     super.initState();
-    _conversations = _chatService.loadConversations();
     _chatService.loadUserProfile();
-    _checkUpdates();
-    _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkUpdates());
+    _fetchHomeData(initial: true);
+    _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
   }
 
   @override
@@ -56,36 +56,38 @@ class _ChatHomePageState extends State<ChatHomePage> {
     super.dispose();
   }
 
-  Future<void> _checkUpdates() async {
+  Future<void> _fetchHomeData({bool initial = false}) async {
+    if (initial && mounted) {
+      setState(() => _isConversationsLoading = true);
+    }
     try {
-      final reqs = await _chatService.loadContactRequests();
+      final results = await Future.wait([
+        _chatService.loadConversations(),
+        _chatService.loadContactRequests(),
+      ]);
+      final convs = results[0] as List<ConversationSummary>;
+      final reqs = results[1] as List<ContactRequestItem>;
       final incoming = reqs.where((r) => r.isIncoming).toList();
-      final convs = await _chatService.loadConversations();
       final unread = convs.fold<int>(0, (sum, c) => sum + c.unreadCount);
 
       if (mounted) {
         setState(() {
+          _conversations = convs;
           _pendingRequestsCount = incoming.length;
           _incomingRequests = incoming;
           _totalUnreadCount = unread;
-          _conversations = Future.value(convs);
+          _isConversationsLoading = false;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted && initial) {
+        setState(() => _isConversationsLoading = false);
+      }
+    }
   }
 
   Future<void> _reloadConversations() async {
-    try {
-      final convs = await _chatService.loadConversations();
-      final unread = convs.fold<int>(0, (sum, c) => sum + c.unreadCount);
-      if (mounted) {
-        setState(() {
-          _totalUnreadCount = unread;
-          _conversations = Future.value(convs);
-        });
-      }
-    } catch (_) {}
-    _checkUpdates();
+    await _fetchHomeData(initial: false);
   }
 
   Future<void> _startConversation() async {
@@ -221,6 +223,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
             children: [
               _ConversationList(
                 conversations: _conversations,
+                isLoading: _isConversationsLoading,
                 onRefresh: _reloadConversations,
                 searchQuery: _searchQuery,
                 filter: _filter,
@@ -313,6 +316,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
 class _ConversationList extends StatelessWidget {
   const _ConversationList({
     required this.conversations,
+    required this.isLoading,
     required this.onRefresh,
     required this.searchQuery,
     required this.filter,
@@ -322,7 +326,8 @@ class _ConversationList extends StatelessWidget {
     required this.onFilterChanged,
   });
 
-  final Future<List<ConversationSummary>> conversations;
+  final List<ConversationSummary> conversations;
+  final bool isLoading;
   final Future<void> Function() onRefresh;
   final String searchQuery;
   final _ConversationFilter filter;
@@ -426,135 +431,128 @@ class _ConversationList extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: FutureBuilder<List<ConversationSummary>>(
-            future: conversations,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return _RetryState(onRefresh: onRefresh);
-              }
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final items = snapshot.data!.where(_matches).toList();
-              if (items.isEmpty) {
-                return RefreshIndicator(
-                  onRefresh: onRefresh,
-                  child: const CustomScrollView(
-                    physics: AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _EmptySection(
-                          icon: Icons.forum_outlined,
-                          title: 'Tus conversaciones aparecerán aquí',
-                          message:
-                              'Pulsa el botón de chat o agrega contactos para iniciar una conversación segura.',
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return RefreshIndicator(
-                onRefresh: onRefresh,
-                child: ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1, indent: 82),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: CircleAvatar(
-                        radius: 27,
-                        backgroundColor: AppColors.secondary,
-                        backgroundImage: item.avatarUrl != null ? NetworkImage(item.avatarUrl!) : null,
-                        child: item.avatarUrl == null
-                            ? Text(item.title.characters.first.toUpperCase())
-                            : null,
-                      ),
-                      title: Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: item.unreadCount > 0
-                              ? FontWeight.w800
-                              : FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        item.lastMessage ?? 'Conversación nueva',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: SizedBox(
-                        width: 76,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _formatActivity(item.lastActivityAt),
-                              maxLines: 1,
-                              style: TextStyle(
-                                color: item.unreadCount > 0
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                                fontSize: 12,
-                                fontWeight: item.unreadCount > 0
-                                    ? FontWeight.w700
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            if (item.unreadCount > 0) ...[
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.brandGradient,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  item.unreadCount > 99
-                                      ? '99+'
-                                      : '${item.unreadCount}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => ConversationPage(
-                              conversationId: item.id,
-                              title: item.title,
-                              avatarUrl: item.avatarUrl,
+          child: isLoading && conversations.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : () {
+                  final items = conversations.where(_matches).toList();
+                  if (items.isEmpty) {
+                    return RefreshIndicator(
+                      onRefresh: onRefresh,
+                      child: const CustomScrollView(
+                        physics: AlwaysScrollableScrollPhysics(),
+                        slivers: [
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _EmptySection(
+                              icon: Icons.forum_outlined,
+                              title: 'Tus conversaciones aparecerán aquí',
+                              message:
+                                  'Pulsa el botón de chat o agrega contactos para iniciar una conversación segura.',
                             ),
                           ),
-                        );
-                        await onRefresh();
-                      },
+                        ],
+                      ),
                     );
-                  },
-                ),
-              );
-            },
-          ),
+                  }
+                  return RefreshIndicator(
+                    onRefresh: onRefresh,
+                    child: ListView.separated(
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 82),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: CircleAvatar(
+                            radius: 27,
+                            backgroundColor: AppColors.secondary,
+                            backgroundImage: item.avatarUrl != null ? NetworkImage(item.avatarUrl!) : null,
+                            child: item.avatarUrl == null
+                                ? Text(item.title.characters.first.toUpperCase())
+                                : null,
+                          ),
+                          title: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: item.unreadCount > 0
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            item.lastMessage ?? 'Conversación nueva',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: SizedBox(
+                            width: 76,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _formatActivity(item.lastActivityAt),
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: item.unreadCount > 0
+                                        ? AppColors.primary
+                                        : AppColors.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: item.unreadCount > 0
+                                        ? FontWeight.w700
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                                if (item.unreadCount > 0) ...[
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: AppColors.brandGradient,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      item.unreadCount > 99
+                                          ? '99+'
+                                          : '${item.unreadCount}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ConversationPage(
+                                  conversationId: item.id,
+                                  title: item.title,
+                                  avatarUrl: item.avatarUrl,
+                                ),
+                              ),
+                            );
+                            await onRefresh();
+                          },
+                        );
+                      },
+                    ),
+                  );
+                }(),
         ),
       ],
     );
@@ -784,7 +782,7 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.info_outline_rounded,
           title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.1.9, autor, derechos y licencias',
+          subtitle: 'Versión 1.2.0, autor, derechos y licencias',
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -825,7 +823,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.1.9 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.2.0 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,
