@@ -464,47 +464,51 @@ class _ConversationList extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _formatActivity(item.lastActivityAt),
-                            style: TextStyle(
-                              color: item.unreadCount > 0
-                                  ? AppColors.primary
-                                  : AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
-                          ),
-                          if (item.unreadCount > 0) ...[
-                            const SizedBox(height: 5),
-                            Container(
-                              constraints: const BoxConstraints(minWidth: 22),
-                              height: 22,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              alignment: Alignment.center,
-                              decoration: const BoxDecoration(
-                                gradient: AppColors.brandGradient,
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(11),
-                                ),
-                              ),
-                              child: Text(
-                                item.unreadCount > 99
-                                    ? '99+'
-                                    : '${item.unreadCount}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                      trailing: SizedBox(
+                        width: 76,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatActivity(item.lastActivityAt),
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: item.unreadCount > 0
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: item.unreadCount > 0
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
                               ),
                             ),
+                            if (item.unreadCount > 0) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.brandGradient,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  item.unreadCount > 99
+                                      ? '99+'
+                                      : '${item.unreadCount}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                       onTap: () async {
                         await Navigator.of(context).push(
@@ -753,7 +757,7 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.info_outline_rounded,
           title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.1.6, autor, derechos y licencias',
+          subtitle: 'Versión 1.1.7, autor, derechos y licencias',
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -794,7 +798,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.1.6 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.1.7 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,
