@@ -93,35 +93,45 @@ class _RegisterPageState extends State<RegisterPage> {
       );
       return;
     }
+    final username = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+    final email = _emailController.text.trim();
+    final displayName = _nameController.text.trim();
+
     setState(() => _isSubmitting = true);
     try {
-      final response = await AuthService().signUp(
-        email: _emailController.text.trim(),
+      await AuthService().signUp(
+        email: email,
         password: _passwordController.text,
-        displayName: _nameController.text.trim(),
-        username: _usernameController.text.trim(),
+        displayName: displayName,
+        username: username,
       );
+
+      _nameController.clear();
+      _usernameController.clear();
+      _emailController.clear();
+      _passwordController.clear();
+      _confirmationController.clear();
+
       if (!mounted) return;
-      if (response.session != null) {
-        return;
-      } else {
-        await showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Confirma tu correo'),
-            content: const Text(
-              'Te enviamos un enlace de confirmación. Ábrelo antes de iniciar sesión.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Entendido'),
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('¡Cuenta creada con éxito para @$username! Ya puedes iniciar sesión.'),
               ),
             ],
           ),
-        );
-        if (mounted) Navigator.of(context).pop();
-      }
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+
+      Navigator.of(context).pop(email);
     } on AuthException catch (error) {
       if (!mounted) return;
       final normalized = error.message.toLowerCase();

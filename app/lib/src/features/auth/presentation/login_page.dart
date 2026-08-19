@@ -353,11 +353,17 @@ class _LoginPageState extends State<LoginPage> {
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const RegisterPage(),
-                              ),
-                            ),
+                            onPressed: () async {
+                              final registeredEmail = await Navigator.of(context).push<String>(
+                                MaterialPageRoute<String>(
+                                  builder: (_) => const RegisterPage(),
+                                ),
+                              );
+                              if (registeredEmail != null && registeredEmail.isNotEmpty) {
+                                _emailController.text = registeredEmail;
+                                _passwordController.clear();
+                              }
+                            },
                             child: const Text('Crear cuenta'),
                           ),
                         ],
