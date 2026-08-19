@@ -150,72 +150,97 @@ class _NewConversationPageState extends State<NewConversationPage> {
               );
             }
 
-            return ListView.separated(
-              itemCount: contacts.length + 1,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                if (index == 0) {
+            return ListView(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              children: [
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 20),
+                  ),
+                  title: const Text(
+                    'Nuevo contacto por @alias',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                  subtitle: const Text('Conectar con personas mediante su alias único'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _showAddContact,
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF25D366),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+                  ),
+                  title: const Text(
+                    'Invitar amigos por WhatsApp',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                  subtitle: const Text('Compartir enlace y tu alias'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => InviteService.inviteViaWhatsApp(),
+                ),
+                const Divider(height: 20),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Text(
+                    'Contactos en InclusiChat (${contacts.length})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                ...contacts.map((contact) {
+                  final isOpening = _openingContactId == contact.id;
                   return ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.person_add_rounded, color: AppColors.primary, size: 20),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.secondary,
+                      backgroundImage: contact.avatarUrl != null ? NetworkImage(contact.avatarUrl!) : null,
+                      child: contact.avatarUrl == null
+                          ? Text(
+                              contact.displayName.characters.first.toUpperCase(),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            )
+                          : null,
                     ),
-                    title: const Text(
-                      'Buscar nuevo usuario por @alias',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
-                    ),
-                    subtitle: const Text('Conectar con personas fuera de tu lista'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: _showAddContact,
-                  );
-                }
-
-                final contact = contacts[index - 1];
-                final isOpening = _openingContactId == contact.id;
-
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppColors.secondary,
-                    backgroundImage: contact.avatarUrl != null ? NetworkImage(contact.avatarUrl!) : null,
-                    child: contact.avatarUrl == null
-                        ? Text(
-                            contact.displayName.characters.first.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          )
-                        : null,
-                  ),
-                  title: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          contact.displayName,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            contact.displayName,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
-                      ),
-                      if (contact.isVerified) ...[
-                        const SizedBox(width: 5),
-                        const Icon(
-                          Icons.verified_rounded,
-                          size: 16,
-                          color: AppColors.primary,
-                        ),
+                        if (contact.isVerified) ...[
+                          const SizedBox(width: 5),
+                          const Icon(
+                            Icons.verified_rounded,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                  subtitle: contact.username == null ? null : Text('@${contact.username}'),
-                  trailing: isOpening
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
-                  onTap: _openingContactId == null ? () => _open(contact) : null,
-                );
-              },
+                    ),
+                    subtitle: contact.username == null ? null : Text('@${contact.username}'),
+                    trailing: isOpening
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
+                    onTap: _openingContactId == null ? () => _open(contact) : null,
+                  );
+                }),
+              ],
             );
           },
         ),

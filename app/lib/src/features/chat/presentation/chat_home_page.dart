@@ -35,6 +35,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
   final _chatService = ChatService();
   late Future<List<ConversationSummary>> _conversations;
   int _pendingRequestsCount = 0;
+  int _totalUnreadCount = 0;
   List<ContactRequestItem> _incomingRequests = [];
   Timer? _homeRefreshTimer;
 
@@ -45,8 +46,8 @@ class _ChatHomePageState extends State<ChatHomePage> {
     super.initState();
     _conversations = _chatService.loadConversations();
     _chatService.loadUserProfile();
-    _checkRequests();
-    _homeRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) => _checkRequests());
+    _checkUpdates();
+    _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkUpdates());
   }
 
   @override
@@ -55,23 +56,36 @@ class _ChatHomePageState extends State<ChatHomePage> {
     super.dispose();
   }
 
-  Future<void> _checkRequests() async {
+  Future<void> _checkUpdates() async {
     try {
       final reqs = await _chatService.loadContactRequests();
       final incoming = reqs.where((r) => r.isIncoming).toList();
-      if (mounted && (_pendingRequestsCount != incoming.length || _incomingRequests.length != incoming.length)) {
+      final convs = await _chatService.loadConversations();
+      final unread = convs.fold<int>(0, (sum, c) => sum + c.unreadCount);
+
+      if (mounted) {
         setState(() {
           _pendingRequestsCount = incoming.length;
           _incomingRequests = incoming;
+          _totalUnreadCount = unread;
+          _conversations = Future.value(convs);
         });
       }
     } catch (_) {}
   }
 
   Future<void> _reloadConversations() async {
-    setState(() => _conversations = _chatService.loadConversations());
-    await _conversations;
-    _checkRequests();
+    try {
+      final convs = await _chatService.loadConversations();
+      final unread = convs.fold<int>(0, (sum, c) => sum + c.unreadCount);
+      if (mounted) {
+        setState(() {
+          _totalUnreadCount = unread;
+          _conversations = Future.value(convs);
+        });
+      }
+    } catch (_) {}
+    _checkUpdates();
   }
 
   Future<void> _startConversation() async {
@@ -224,9 +238,10 @@ class _ChatHomePageState extends State<ChatHomePage> {
           ),
           floatingActionButton: _selectedIndex == 0
               ? FloatingActionButton(
-                  tooltip: 'Nueva conversación',
+                  tooltip: 'Nuevo chat o contacto',
                   onPressed: _startConversation,
-                  child: const Icon(Icons.chat_rounded),
+                  backgroundColor: AppColors.primary,
+                  child: const Icon(Icons.add_comment_rounded, color: Colors.white),
                 )
               : null,
           bottomNavigationBar: NavigationBar(
@@ -236,9 +251,21 @@ class _ChatHomePageState extends State<ChatHomePage> {
               if (index == 0) _reloadConversations();
             },
             destinations: [
-              const NavigationDestination(
-                icon: Icon(Icons.chat_bubble_outline_rounded),
-                selectedIcon: Icon(Icons.chat_bubble_rounded),
+              NavigationDestination(
+                icon: _totalUnreadCount > 0
+                    ? Badge.count(
+                        count: _totalUnreadCount,
+                        backgroundColor: AppColors.primary,
+                        child: const Icon(Icons.chat_bubble_outline_rounded),
+                      )
+                    : const Icon(Icons.chat_bubble_outline_rounded),
+                selectedIcon: _totalUnreadCount > 0
+                    ? Badge.count(
+                        count: _totalUnreadCount,
+                        backgroundColor: AppColors.primary,
+                        child: const Icon(Icons.chat_bubble_rounded),
+                      )
+                    : const Icon(Icons.chat_bubble_rounded),
                 label: 'Chats',
               ),
               NavigationDestination(
@@ -757,7 +784,7 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.info_outline_rounded,
           title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.1.8, autor, derechos y licencias',
+          subtitle: 'Versión 1.1.9, autor, derechos y licencias',
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -798,7 +825,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.1.8 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.1.9 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,

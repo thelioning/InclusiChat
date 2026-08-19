@@ -719,6 +719,12 @@ class ChatService {
       'type': 'text',
       'content': text,
     });
+
+    try {
+      await _client.from('conversations').update({
+        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', conversationId);
+    } catch (_) {}
   }
 
   bool isOwnMessage(Map<String, dynamic> message) =>
