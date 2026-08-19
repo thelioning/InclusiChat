@@ -84,9 +84,12 @@ class _ConversationPageState extends State<ConversationPage> {
     });
   }
 
+  bool _isSubmitting = false;
+
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty || _isSubmitting) return;
+    _isSubmitting = true;
     setState(() => _sending = true);
     _controller.clear();
     try {
@@ -110,6 +113,7 @@ class _ConversationPageState extends State<ConversationPage> {
         );
       }
     } finally {
+      _isSubmitting = false;
       if (mounted) setState(() => _sending = false);
     }
   }
@@ -254,13 +258,21 @@ class _ConversationPageState extends State<ConversationPage> {
                       if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      final messages = [...snapshot.data!]
-                        ..sort(
-                          (a, b) => DateTime.parse(a['created_at'] as String)
-                              .compareTo(
-                                DateTime.parse(b['created_at'] as String),
-                              ),
-                        );
+                      final rawMessages = snapshot.data ?? const [];
+                      final seenIds = <String>{};
+                      final messages = <Map<String, dynamic>>[];
+                      for (final m in rawMessages) {
+                        final id = m['id'] as String?;
+                        if (id != null && seenIds.add(id)) {
+                          messages.add(m);
+                        }
+                      }
+                      messages.sort(
+                        (a, b) => DateTime.parse(a['created_at'] as String)
+                            .compareTo(
+                              DateTime.parse(b['created_at'] as String),
+                            ),
+                      );
                       _markIncomingMessagesRead(messages);
                       _keepLatestMessageVisible(messages.length);
                       if (messages.isEmpty) {
@@ -351,6 +363,10 @@ class _ConversationPageState extends State<ConversationPage> {
                             minLines: 1,
                             maxLines: 5,
                             textCapitalization: TextCapitalization.sentences,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) {
+                              if (_hasText && !_isSubmitting) _send();
+                            },
                             decoration: const InputDecoration(
                               hintText: 'Mensaje',
                               border: InputBorder.none,
