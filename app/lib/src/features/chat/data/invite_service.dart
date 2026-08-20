@@ -22,7 +22,7 @@ class InviteService {
     if (username.isEmpty) username = 'usuario';
 
     final text = '¡Hola! Te invito a probar InclusiChat 💜✨ Mensajería privada y segura sin compartir tu número de teléfono.\n\n'
-        '📲 Descarga la app aquí:\nhttps://github.com/thelioning/InclusiChat/releases/download/v1.2.4/InclusiChat-v1.2.4.apk\n\n'
+        '📲 Descarga la app aquí:\nhttps://github.com/thelioning/InclusiChat/releases/download/v1.2.5/InclusiChat-v1.2.5.apk\n\n'
         'Al instalarla, búscame en la pestaña Contactos como @$username para chatear 🙌';
 
     final nativeUri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -312,6 +313,8 @@ class _ConversationPageState extends State<ConversationPage> {
                               return _MessageBubble(
                                 messageId: message['id'] as String,
                                 content: message['content'] as String? ?? '',
+                                type: message['type'] as String?,
+                                metadata: message['metadata'] as Map?,
                                 own: own,
                                 createdAt: DateTime.parse(
                                   message['created_at'] as String,
@@ -772,6 +775,8 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.messageId,
     required this.content,
+    this.type,
+    this.metadata,
     required this.own,
     required this.createdAt,
     this.receiptStatus,
@@ -780,13 +785,52 @@ class _MessageBubble extends StatelessWidget {
 
   final String messageId;
   final String content;
+  final String? type;
+  final Map<dynamic, dynamic>? metadata;
   final bool own;
   final DateTime createdAt;
   final String? receiptStatus;
   final VoidCallback onLongPress;
 
+  void _openFullPhoto(BuildContext context, String imageBase64) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                child: Image.memory(
+                  base64Decode(imageBase64),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final imageBase64 = metadata?['image_base64'] as String?;
+    final hasImage = imageBase64 != null && imageBase64.isNotEmpty;
+    final cleanContent = content.replaceAll('📷 Foto', '').replaceAll('📷 ', '').trim();
+
     return Align(
       alignment: own ? Alignment.centerRight : Alignment.centerLeft,
       child: InkWell(
@@ -795,7 +839,7 @@ class _MessageBubble extends StatelessWidget {
         child: Container(
           constraints: const BoxConstraints(maxWidth: 310),
           margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: own ? AppColors.secondary : AppColors.surfaceRaised,
             borderRadius: BorderRadius.only(
@@ -808,31 +852,59 @@ class _MessageBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Align(alignment: Alignment.centerLeft, child: Text(content)),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _formatTime(createdAt),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+              if (hasImage) ...[
+                GestureDetector(
+                  onTap: () => _openFullPhoto(context, imageBase64),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(
+                      base64Decode(imageBase64),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 200,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
+                      ),
                     ),
                   ),
-                  if (own) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      receiptStatus == 'delivered' || receiptStatus == 'read'
-                          ? Icons.done_all_rounded
-                          : Icons.check_rounded,
-                      size: 16,
-                      color: receiptStatus == 'read'
-                          ? AppColors.receiptRead
-                          : AppColors.textSecondary,
+                ),
+                if (cleanContent.isNotEmpty) const SizedBox(height: 6),
+              ],
+              if (cleanContent.isNotEmpty || !hasImage)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(cleanContent.isNotEmpty ? cleanContent : content),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _formatTime(createdAt),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
+                    if (own) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        receiptStatus == 'delivered' || receiptStatus == 'read'
+                            ? Icons.done_all_rounded
+                            : Icons.check_rounded,
+                        size: 16,
+                        color: receiptStatus == 'read'
+                            ? AppColors.receiptRead
+                            : AppColors.textSecondary,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ],
           ),

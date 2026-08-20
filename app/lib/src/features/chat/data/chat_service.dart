@@ -902,6 +902,56 @@ class ChatService {
     } catch (_) {}
   }
 
+  Future<void> sendImageMessage({
+    required String conversationId,
+    required String imageBase64,
+    String? caption,
+  }) async {
+    final cleanCaption = caption?.trim() ?? '';
+    final displayContent = cleanCaption.isNotEmpty ? '📷 $cleanCaption' : '📷 Foto';
+
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': _userId,
+      'type': 'image',
+      'content': displayContent,
+      'metadata': {
+        'image_base64': imageBase64,
+        'caption': cleanCaption,
+      },
+    });
+
+    try {
+      await _client.from('conversations').update({
+        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', conversationId);
+    } catch (_) {}
+  }
+
+  Future<void> sendImageToMultipleDestinations({
+    required List<String> contactUserIds,
+    required List<String> conversationIds,
+    required String imageBase64,
+    String? caption,
+  }) async {
+    final targetConvIds = <String>{...conversationIds};
+    for (final uId in contactUserIds) {
+      try {
+        final convId = await createDirectConversation(uId);
+        targetConvIds.add(convId);
+      } catch (_) {}
+    }
+    for (final convId in targetConvIds) {
+      try {
+        await sendImageMessage(
+          conversationId: convId,
+          imageBase64: imageBase64,
+          caption: caption,
+        );
+      } catch (_) {}
+    }
+  }
+
   bool isOwnMessage(Map<String, dynamic> message) =>
       message['sender_id'] == _userId;
 }

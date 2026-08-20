@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:image_picker/image_picker.dart';
+
 import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
 import '../../security/presentation/camouflage_screen.dart';
@@ -16,6 +18,7 @@ import 'contacts_page.dart';
 import 'conversation_page.dart';
 import 'new_conversation_page.dart';
 import 'profile_settings_page.dart';
+import 'quick_photo_preview_page.dart';
 import 'user_guide_page.dart';
 
 enum _ConversationFilter { all, unread, starred, circles, collectives }
@@ -97,6 +100,75 @@ class _ChatHomePageState extends State<ChatHomePage> {
     if (mounted) await _reloadConversations();
   }
 
+  Future<void> _openQuickCamera() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: AppColors.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.textSecondary.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+                  title: const Text('Tomar foto con la cámara'),
+                  onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_rounded, color: AppColors.secondary),
+                  title: const Text('Elegir foto de la galería'),
+                  onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (picked == null) return;
+
+      final file = await picker.pickImage(
+        source: picked,
+        imageQuality: 80,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+
+      if (file != null && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => QuickPhotoPreviewPage(imagePath: file.path),
+          ),
+        );
+        if (mounted) await _reloadConversations();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo acceder a la cámara o galería.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _signOut() async {
     setState(() => _signingOut = true);
     try {
@@ -137,6 +209,12 @@ class _ChatHomePageState extends State<ChatHomePage> {
               ],
             ),
             actions: [
+              if (_selectedIndex == 0)
+                IconButton(
+                  tooltip: 'Cámara rápida',
+                  onPressed: _openQuickCamera,
+                  icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+                ),
               if (CamouflageService.instance.isCamouflageFeatureActive)
                 IconButton(
                   tooltip: 'Modo pánico / Camuflar',
@@ -809,7 +887,7 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.info_outline_rounded,
           title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.2.4, autor, derechos y licencias',
+          subtitle: 'Versión 1.2.5, autor, derechos y licencias',
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -850,7 +928,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.2.4 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.2.5 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,
