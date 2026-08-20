@@ -3,14 +3,14 @@ import 'package:flutter/services.dart';
 class CallAudioService {
   static const MethodChannel _channel = MethodChannel('com.inclusichat/ringtone');
 
-  /// Inicia el timbre oficial del sistema y la vibración del hardware para llamada entrante
-  static Future<void> startIncomingRinging() async {
+  /// Inicia el timbre oficial, vibración del hardware y notificación prioritaria con despertar de pantalla
+  static Future<void> startIncomingRinging({String callerName = 'Contacto'}) async {
     try {
-      await _channel.invokeMethod('startIncomingRinging');
+      await _channel.invokeMethod('startIncomingRinging', {'callerName': callerName});
     } catch (_) {}
   }
 
-  /// Detiene el timbre y la vibración de llamada entrante
+  /// Detiene el timbre, vibración y cancela la notificación de llamada
   static Future<void> stopIncomingRinging() async {
     try {
       await _channel.invokeMethod('stopIncomingRinging');
@@ -28,6 +28,13 @@ class CallAudioService {
   static Future<void> stopOutgoingDialTone() async {
     try {
       await _channel.invokeMethod('stopOutgoingDialTone');
+    } catch (_) {}
+  }
+
+  /// Trae la aplicación al frente si está en segundo plano
+  static Future<void> bringAppToFront() async {
+    try {
+      await _channel.invokeMethod('bringAppToFront');
     } catch (_) {}
   }
 }

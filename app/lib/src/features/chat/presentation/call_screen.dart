@@ -101,7 +101,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       _initiateOutgoingCall();
     } else {
       _statusMessage = 'Llamada de voz entrante...';
-      CallAudioService.startIncomingRinging();
+      CallAudioService.startIncomingRinging(callerName: widget.contactName);
       _startRingingVibration();
       _startStatusPolling();
     }

@@ -1,6 +1,10 @@
 package com.inclusichat.inclusichat
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.Ringtone
@@ -11,23 +15,29 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.core.app.NotificationCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.inclusichat/ringtone"
+    private val NOTIFICATION_CHANNEL_ID = "inclusichat_calls_channel"
+    private val NOTIFICATION_ID = 9991
+
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
     private var toneGenerator: ToneGenerator? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        createNotificationChannel()
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startIncomingRinging" -> {
-                    startIncomingRinging()
+                    val callerName = call.argument<String>("callerName") ?: "Contacto"
+                    startIncomingRinging(callerName)
                     result.success(true)
                 }
                 "stopIncomingRinging" -> {
@@ -42,18 +52,80 @@ class MainActivity : FlutterActivity() {
                     stopOutgoingDialTone()
                     result.success(true)
                 }
+                "bringAppToFront" -> {
+                    bringAppToFront()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
     }
 
-    private fun startIncomingRinging() {
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Llamadas de InclusiChat"
+            val descriptionText = "Notificaciones prioritarias de llamadas entrantes"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 1000, 1000)
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun bringAppToFront() {
+        try {
+            val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun startIncomingRinging(callerName: String) {
         stopIncomingRinging()
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val ringerMode = audioManager.ringerMode
 
-            // 1. Vibrador real de hardware de Android en bucle
+            // 1. Mostrar notificación de llamada entrante en primer plano / pantalla bloqueada
+            val fullScreenIntent = Intent(applicationContext, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                applicationContext,
+                0,
+                fullScreenIntent,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            val notificationBuilder = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_phone_call)
+                .setContentTitle("Llamada entrante")
+                .setContentText("$callerName te está llamando...")
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setOngoing(true)
+
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build())
+
+            // 2. Traer la app al frente si estaba en segundo plano
+            bringAppToFront()
+
+            // 3. Vibrador real de hardware de Android en bucle
             if (ringerMode != AudioManager.RINGER_MODE_SILENT) {
                 vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -73,11 +145,11 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            // 2. Timbre oficial de llamadas de Android con volumen del sistema
+            // 4. Timbre oficial de llamadas de Android con volumen del sistema
             if (ringerMode == AudioManager.RINGER_MODE_NORMAL) {
                 val notificationUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
                     ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                
+
                 ringtone = RingtoneManager.getRingtone(applicationContext, notificationUri)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     ringtone?.audioAttributes = AudioAttributes.Builder()
@@ -97,6 +169,8 @@ class MainActivity : FlutterActivity() {
 
     private fun stopIncomingRinging() {
         try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(NOTIFICATION_ID)
             ringtone?.stop()
             ringtone = null
             vibrator?.cancel()
