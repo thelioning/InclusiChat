@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app.dart';
-import '../presentation/call_screen.dart';
+import '../../chat/presentation/call_screen.dart';
 
 class CallManager {
   static final CallManager instance = CallManager._internal();
