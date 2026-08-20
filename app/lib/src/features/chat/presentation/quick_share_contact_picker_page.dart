@@ -119,12 +119,17 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Error sending photo: $e\n$stack');
       if (mounted) {
         setState(() => _sending = false);
+        final cleanMsg = e.toString()
+            .replaceAll('Exception:', '')
+            .replaceAll('PostgrestException', '')
+            .trim();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo enviar la foto. Intenta de nuevo.'),
+          SnackBar(
+            content: Text(cleanMsg.isNotEmpty ? cleanMsg : 'No se pudo enviar la foto. Intenta de nuevo.'),
             backgroundColor: AppColors.error,
           ),
         );
