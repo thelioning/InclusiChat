@@ -291,7 +291,7 @@ class InclusiChatCallService : Service() {
             sdf.timeZone = TimeZone.getTimeZone("UTC")
             val clean = if (isoString.contains(".")) isoString.substring(0, isoString.indexOf('.')) else isoString.replace("Z", "")
             sdf.parse(clean)?.time ?: System.currentTimeMillis()
-        } catch (_) {
+        } catch (e: Exception) {
             System.currentTimeMillis()
         }
     }
@@ -464,7 +464,7 @@ class InclusiChatCallService : Service() {
                 }
                 conn.responseCode
                 conn.disconnect()
-            } catch (_) {}
+            } catch (e: Exception) {}
         }.start()
     }
 
