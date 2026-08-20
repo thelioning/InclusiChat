@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/app_config.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 
@@ -75,9 +76,9 @@ class AboutPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                   ),
-                  child: const Text(
-                    'Versión 1.3.1 (Build 32) • Release Estable',
-                    style: TextStyle(
+                  child: Text(
+                    AppConfig.fullVersionString,
+                    style: const TextStyle(
                       color: AppColors.primary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -204,9 +205,9 @@ class AboutPage extends StatelessWidget {
                         onTap: () {
                           showLicensePage(
                             context: context,
-                            applicationName: 'InclusiChat',
-                            applicationVersion: '1.3.1',
-                            applicationLegalese: '© 2026 InclusiChat & Baremetal Academy (Ermógenes Rodríguez Fernández)',
+                            applicationName: AppConfig.appName,
+                            applicationVersion: AppConfig.version,
+                            applicationLegalese: '© 2026 ${AppConfig.appName} & ${AppConfig.organization} (${AppConfig.authorName})',
                           );
                         },
                       ),

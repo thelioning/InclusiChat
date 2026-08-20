@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/app_config.dart';
 import 'chat_service.dart';
 
 class InviteService {
@@ -22,7 +23,7 @@ class InviteService {
     if (username.isEmpty) username = 'usuario';
 
     final text = '¡Hola! Te invito a probar InclusiChat 💜✨ Mensajería privada y segura sin compartir tu número de teléfono.\n\n'
-        '📲 Descarga la app aquí:\nhttps://github.com/thelioning/InclusiChat/releases/download/v1.3.1/InclusiChat-v1.3.1.apk\n\n'
+        '📲 Descarga la app aquí:\n${AppConfig.downloadUrl}\n\n'
         'Al instalarla, búscame en la pestaña Contactos como @$username para chatear 🙌';
 
     final nativeUri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');

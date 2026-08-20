@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app_config.dart';
 import '../../../theme/app_colors.dart';
 import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
@@ -197,7 +198,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _SettingsTile(
                   icon: Icons.info_outline_rounded,
                   title: 'Acerca de InclusiChat',
-                  subtitle: 'Versión 1.3.0, autor, derechos y licencias',
+                  subtitle: 'Versión ${AppConfig.version}, autor, derechos y licencias',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -235,12 +236,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 const SizedBox(height: 18),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
-                    'InclusiChat v1.3.0 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+                    AppConfig.footerCredit,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 11,
                       height: 1.4,

@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/app_config.dart';
 import '../../theme/app_colors.dart';
 
 class UpdateService {
-  static const String currentVersion = '1.3.1';
+  static const String currentVersion = AppConfig.version;
   static bool _hasCheckedThisSession = false;
 
   /// Consulta en segundo plano la última versión disponible en GitHub Releases.
