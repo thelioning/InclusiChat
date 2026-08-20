@@ -60,17 +60,6 @@ class _ChatHomePageState extends State<ChatHomePage> {
     _chatService.loadUserProfile();
     _fetchHomeData(initial: true);
 
-    final currentSession = Supabase.instance.client.auth.currentSession;
-    final currentUid = Supabase.instance.client.auth.currentUser?.id;
-    if (currentUid != null) {
-      CallAudioService.startBackgroundCallService(
-        userId: currentUid,
-        authToken: currentSession?.accessToken,
-        supabaseUrl: const String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://wzkcuvwsbbhrkgkrsrgm.supabase.co'),
-        apiKey: const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: 'sb_publishable_P-yNCVxR9rtpt8Ye6bK_Ig_ve0uRStf'),
-      );
-    }
-
     _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
     _callCheckTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) => _checkIncomingRingingCalls());
 
