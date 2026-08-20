@@ -823,15 +823,13 @@ class _MessageBubble extends StatelessWidget {
                   if (own) ...[
                     const SizedBox(width: 4),
                     Icon(
-                      receiptStatus == null
-                          ? Icons.check_rounded
-                          : Icons.done_all_rounded,
+                      receiptStatus == 'delivered' || receiptStatus == 'read'
+                          ? Icons.done_all_rounded
+                          : Icons.check_rounded,
                       size: 16,
-                      color: switch (receiptStatus) {
-                        'read' => AppColors.receiptRead,
-                        'delivered' => AppColors.primary,
-                        _ => AppColors.textSecondary,
-                      },
+                      color: receiptStatus == 'read'
+                          ? AppColors.receiptRead
+                          : AppColors.textSecondary,
                     ),
                   ],
                 ],

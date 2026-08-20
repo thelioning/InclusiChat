@@ -485,10 +485,37 @@ class _ConversationList extends StatelessWidget {
                                   : FontWeight.w600,
                             ),
                           ),
-                          subtitle: Text(
-                            item.lastMessage ?? 'Conversación nueva',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: Row(
+                            children: [
+                              if (item.isLastMessageMine && item.lastMessage != null) ...[
+                                Icon(
+                                  item.lastMessageReceiptStatus == 'sent'
+                                      ? Icons.check_rounded
+                                      : Icons.done_all_rounded,
+                                  size: 16,
+                                  color: switch (item.lastMessageReceiptStatus) {
+                                    'read' => AppColors.receiptRead,
+                                    _ => AppColors.textSecondary,
+                                  },
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  item.lastMessage ?? 'Conversación nueva',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: item.unreadCount > 0
+                                        ? Colors.white
+                                        : AppColors.textSecondary,
+                                    fontWeight: item.unreadCount > 0
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           trailing: SizedBox(
                             width: 76,
@@ -782,7 +809,7 @@ class _SettingsSection extends StatelessWidget {
         _SettingsTile(
           icon: Icons.info_outline_rounded,
           title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.2.2, autor, derechos y licencias',
+          subtitle: 'Versión 1.2.3, autor, derechos y licencias',
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AboutPage()),
@@ -823,7 +850,7 @@ class _SettingsSection extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-            'InclusiChat v1.2.2 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
+            'InclusiChat v1.2.3 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,

@@ -6,7 +6,7 @@ abstract final class AppColors {
   static const surfaceRaised = Color(0xFF262D34);
   static const primary = Color(0xFFCD1AE9);
   static const secondary = Color(0xFF7624C9);
-  static const receiptRead = Color(0xFFBE7AFF);
+  static const receiptRead = Color(0xFF53BDEB);
   static const textPrimary = Color(0xFFFFFFFF);
   static const textSecondary = Color(0xFFB7BEC7);
   static const success = Color(0xFF27C982);

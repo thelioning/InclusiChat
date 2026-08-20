@@ -10,6 +10,8 @@ class ConversationSummary {
     this.unreadCount = 0,
     this.avatarUrl,
     this.lastMessage,
+    this.isLastMessageMine = false,
+    this.lastMessageReceiptStatus,
     this.isStarred = false,
   });
 
@@ -18,6 +20,8 @@ class ConversationSummary {
   final String type; // 'direct', 'circle', 'collective'
   final String? avatarUrl;
   final String? lastMessage;
+  final bool isLastMessageMine;
+  final String? lastMessageReceiptStatus;
   final DateTime lastActivityAt;
   final int unreadCount;
   final bool isStarred;
@@ -252,12 +256,40 @@ class ChatService {
       }).toList();
 
       final latestMessage = <String, String?>{};
+      final latestMessageSender = <String, String?>{};
+      final latestMessageId = <String, String?>{};
+
       for (final row in visibleMessageRows) {
         final cId = row['conversation_id'].toString();
-        latestMessage.putIfAbsent(
-          cId,
-          () => row['content'] as String?,
-        );
+        if (!latestMessage.containsKey(cId)) {
+          latestMessage[cId] = row['content'] as String?;
+          latestMessageSender[cId] = row['sender_id']?.toString();
+          latestMessageId[cId] = row['id']?.toString();
+        }
+      }
+
+      // Obtener recibos de mis últimos mensajes enviados para saber si fueron entregados o leídos
+      final myLatestMessageIds = latestMessageSender.entries
+          .where((e) => e.value == _userId && latestMessageId[e.key] != null)
+          .map((e) => latestMessageId[e.key]!)
+          .toList();
+
+      final myLatestReceipts = <String, String>{};
+      if (myLatestMessageIds.isNotEmpty) {
+        try {
+          final myReceiptRows = await _client
+              .from('message_receipts')
+              .select('message_id,status')
+              .neq('user_id', _userId)
+              .inFilter('message_id', myLatestMessageIds);
+          for (final r in (myReceiptRows as List)) {
+            final mId = r['message_id'].toString();
+            final st = r['status'].toString();
+            if (st == 'read' || myLatestReceipts[mId] == null) {
+              myLatestReceipts[mId] = st;
+            }
+          }
+        } catch (_) {}
       }
 
       final incomingMessageIds = visibleMessageRows
@@ -272,6 +304,18 @@ class ChatService {
               .select('message_id,status')
               .eq('user_id', _userId)
               .inFilter('message_id', incomingMessageIds);
+
+      final knownReceiptIds = (receiptRows as List)
+          .map<String>((row) => row['message_id'].toString())
+          .toSet();
+
+      // Registrar automáticamente como entregados los mensajes recibidos en este dispositivo
+      final unreceivedIds = incomingMessageIds.where((id) => !knownReceiptIds.contains(id)).toList();
+      if (unreceivedIds.isNotEmpty) {
+        for (final mId in unreceivedIds) {
+          markMessageDelivered(mId);
+        }
+      }
 
       final readMessageIds = (receiptRows as List)
           .where((row) => row['status'] == 'read')
@@ -309,12 +353,20 @@ class ChatService {
         final rawActivity = row['last_activity_at'] ?? row['created_at'];
         final activityDate = _parseDate(rawActivity);
 
+        final isMine = latestMessageSender[id] == _userId;
+        final lMsgId = latestMessageId[id];
+        final receiptStatus = isMine && lMsgId != null
+            ? (myLatestReceipts[lMsgId] ?? 'sent')
+            : null;
+
         return ConversationSummary(
           id: id,
           type: row['type']?.toString() ?? 'direct',
           title: title,
           avatarUrl: (row['avatar_url'] ?? partner?['avatar_url']) as String?,
           lastMessage: latestMessage[id],
+          isLastMessageMine: isMine,
+          lastMessageReceiptStatus: receiptStatus,
           unreadCount: unreadByConversation[id] ?? 0,
           lastActivityAt: activityDate,
         );
@@ -773,6 +825,25 @@ class ChatService {
     return _client
         .from('message_receipts')
         .stream(primaryKey: ['message_id', 'user_id']);
+  }
+
+  Future<void> markMessageDelivered(String messageId) async {
+    try {
+      final existing = await _client
+          .from('message_receipts')
+          .select('status')
+          .eq('message_id', messageId)
+          .eq('user_id', _userId)
+          .maybeSingle();
+      if (existing == null) {
+        await _client.from('message_receipts').upsert({
+          'message_id': messageId,
+          'user_id': _userId,
+          'status': 'delivered',
+          'status_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'message_id,user_id');
+      }
+    } catch (_) {}
   }
 
   Future<void> markMessageRead(String messageId) async {
