@@ -640,7 +640,7 @@ class _ConversationPageState extends State<ConversationPage> {
         audioUrl: audioUrl,
         durationSeconds: durationSeconds,
       );
-      _scrollToBottom();
+      _jumpToLatest();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
