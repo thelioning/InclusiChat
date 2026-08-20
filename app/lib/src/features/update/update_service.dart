@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../theme/app_colors.dart';
+import '../../theme/app_colors.dart';
 
 class UpdateService {
   static const String currentVersion = '1.3.0';
