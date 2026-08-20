@@ -203,18 +203,29 @@ class ChatService {
 
       final messageRows = await _client
           .from('messages')
-          .select('id,conversation_id,sender_id,content,created_at')
+          .select('id,conversation_id,sender_id,content,created_at,metadata,is_deleted')
           .inFilter('conversation_id', ids)
           .eq('is_deleted', false)
           .order('created_at', ascending: false);
+
+      final visibleMessageRows = (messageRows as List).where((row) {
+        if (row['is_deleted'] == true) return false;
+        final meta = row['metadata'];
+        if (meta is Map && meta['deleted_for'] is List) {
+          final deletedList = meta['deleted_for'] as List;
+          if (deletedList.contains(_userId)) return false;
+        }
+        return true;
+      }).toList();
+
       final latestMessage = <String, String?>{};
-      for (final row in (messageRows as List)) {
+      for (final row in visibleMessageRows) {
         latestMessage.putIfAbsent(
           row['conversation_id'] as String,
           () => row['content'] as String?,
         );
       }
-      final incomingMessageIds = (messageRows as List)
+      final incomingMessageIds = visibleMessageRows
           .where((row) => row['sender_id'] != _userId)
           .map<String>((row) => row['id'] as String)
           .toList();
@@ -230,7 +241,7 @@ class ChatService {
           .map<String>((row) => row['message_id'] as String)
           .toSet();
       final unreadByConversation = <String, int>{};
-      for (final row in messageRows) {
+      for (final row in visibleMessageRows) {
         final messageId = row['id'] as String;
         if (row['sender_id'] != _userId && !readMessageIds.contains(messageId)) {
           final conversationId = row['conversation_id'] as String;
@@ -676,7 +687,15 @@ class ChatService {
           .eq('conversation_id', conversationId)
           .eq('is_deleted', false)
           .order('created_at', ascending: true);
-      return List<Map<String, dynamic>>.from(rows as List);
+      return List<Map<String, dynamic>>.from(rows as List).where((row) {
+        if (row['is_deleted'] == true) return false;
+        final meta = row['metadata'];
+        if (meta is Map && meta['deleted_for'] is List) {
+          final deletedList = meta['deleted_for'] as List;
+          if (deletedList.contains(_userId)) return false;
+        }
+        return true;
+      }).toList();
     } catch (_) {
       return const [];
     }
@@ -688,7 +707,15 @@ class ChatService {
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('created_at')
-        .map((rows) => rows.where((row) => row['is_deleted'] != true).toList());
+        .map((rows) => rows.where((row) {
+          if (row['is_deleted'] == true) return false;
+          final meta = row['metadata'];
+          if (meta is Map && meta['deleted_for'] is List) {
+            final deletedList = meta['deleted_for'] as List;
+            if (deletedList.contains(_userId)) return false;
+          }
+          return true;
+        }).toList());
   }
 
   Stream<List<Map<String, dynamic>>> watchReceipts() {
@@ -724,6 +751,32 @@ class ChatService {
       await _client.from('conversations').update({
         'last_activity_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', conversationId);
+    } catch (_) {}
+  }
+
+  Future<void> deleteMessageForEveryone(String messageId) async {
+    await _client.from('messages').update({
+      'is_deleted': true,
+      'content': '🚫 Este mensaje fue eliminado',
+    }).eq('id', messageId);
+  }
+
+  Future<void> deleteMessageForMe(String messageId) async {
+    try {
+      final row = await _client
+          .from('messages')
+          .select('metadata')
+          .eq('id', messageId)
+          .maybeSingle();
+      final currentMeta = Map<String, dynamic>.from((row?['metadata'] as Map?) ?? {});
+      final deletedFor = List<String>.from((currentMeta['deleted_for'] as List?) ?? []);
+      if (!deletedFor.contains(_userId)) {
+        deletedFor.add(_userId);
+        currentMeta['deleted_for'] = deletedFor;
+        await _client.from('messages').update({
+          'metadata': currentMeta,
+        }).eq('id', messageId);
+      }
     } catch (_) {}
   }
 

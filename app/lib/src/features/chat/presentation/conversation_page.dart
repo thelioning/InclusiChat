@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
@@ -309,12 +310,14 @@ class _ConversationPageState extends State<ConversationPage> {
                               final message = messages[index];
                               final own = _service.isOwnMessage(message);
                               return _MessageBubble(
+                                messageId: message['id'] as String,
                                 content: message['content'] as String? ?? '',
                                 own: own,
                                 createdAt: DateTime.parse(
                                   message['created_at'] as String,
                                 ),
                                 receiptStatus: receiptStatus[message['id']],
+                                onLongPress: () => _showMessageOptions(message, own),
                               );
                             },
                           );
@@ -665,34 +668,129 @@ class _ConversationPageState extends State<ConversationPage> {
       ),
     );
   }
+  void _showMessageOptions(Map<String, dynamic> message, bool own) {
+    final messageId = message['id'] as String;
+    final content = message['content'] as String? ?? '';
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondary.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              if (content.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    content,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontStyle: FontStyle.italic,
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              const Divider(height: 16),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
+                title: const Text('Copiar texto'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  Clipboard.setData(ClipboardData(text: content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Mensaje copiado al portapapeles.'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                title: const Text('Eliminar para mí', style: TextStyle(color: AppColors.error)),
+                subtitle: const Text('Se eliminará únicamente de tu chat'),
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  await _service.deleteMessageForMe(messageId);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Mensaje eliminado para ti.'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  }
+                },
+              ),
+              if (own)
+                ListTile(
+                  leading: const Icon(Icons.delete_forever_rounded, color: AppColors.error),
+                  title: const Text(
+                    'Eliminar para todos',
+                    style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Se eliminará para ti y para el destinatario'),
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    await _service.deleteMessageForEveryone(messageId);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Mensaje eliminado para todos.'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    required this.messageId,
     required this.content,
     required this.own,
     required this.createdAt,
     this.receiptStatus,
+    required this.onLongPress,
   });
 
+  final String messageId;
   final String content;
   final bool own;
   final DateTime createdAt;
   final String? receiptStatus;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: own ? Alignment.centerRight : Alignment.centerLeft,
       child: InkWell(
-        onLongPress: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Mensaje copiado al portapapeles.'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        },
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 310),
