@@ -866,9 +866,27 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageBase64 = metadata?['image_base64'] as String?;
+    String? imageBase64;
+    String? caption;
+    String displayContent = content;
+
+    if (content.startsWith('{') && content.contains('image_base64')) {
+      try {
+        final decoded = jsonDecode(content) as Map;
+        imageBase64 = decoded['image_base64'] as String?;
+        caption = decoded['caption'] as String?;
+      } catch (_) {}
+    } else if (metadata != null && metadata!['image_base64'] != null) {
+      imageBase64 = metadata!['image_base64'] as String?;
+      caption = metadata!['caption'] as String?;
+    }
+
     final hasImage = imageBase64 != null && imageBase64.isNotEmpty;
-    final cleanContent = content.replaceAll('📷 Foto', '').replaceAll('📷 ', '').trim();
+    final cleanCaption = (caption != null && caption.isNotEmpty)
+        ? caption
+        : (hasImage
+            ? displayContent.replaceAll('📷 Foto', '').replaceAll('📷 ', '').trim()
+            : displayContent);
 
     return Align(
       alignment: own ? Alignment.centerRight : Alignment.centerLeft,
@@ -893,28 +911,28 @@ class _MessageBubble extends StatelessWidget {
             children: [
               if (hasImage) ...[
                 GestureDetector(
-                  onTap: () => _openFullPhoto(context, imageBase64),
+                  onTap: () => _openFullPhoto(context, imageBase64!),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.memory(
-                      base64Decode(imageBase64),
+                      base64Decode(imageBase64!),
                       fit: BoxFit.cover,
                       width: double.infinity,
-                      height: 200,
+                      height: 220,
                       errorBuilder: (_, __, ___) => const Center(
                         child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
                       ),
                     ),
                   ),
                 ),
-                if (cleanContent.isNotEmpty) const SizedBox(height: 6),
+                if (cleanCaption.isNotEmpty) const SizedBox(height: 6),
               ],
-              if (cleanContent.isNotEmpty || !hasImage)
+              if (cleanCaption.isNotEmpty || !hasImage)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(cleanContent.isNotEmpty ? cleanContent : content),
+                    child: Text(cleanCaption),
                   ),
                 ),
               const SizedBox(height: 4),

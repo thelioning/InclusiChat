@@ -262,7 +262,18 @@ class ChatService {
       for (final row in visibleMessageRows) {
         final cId = row['conversation_id'].toString();
         if (!latestMessage.containsKey(cId)) {
-          latestMessage[cId] = row['content'] as String?;
+          final rawContent = row['content'] as String?;
+          String? displayContent = rawContent;
+          if (rawContent != null && rawContent.startsWith('{') && rawContent.contains('image_base64')) {
+            try {
+              final decoded = jsonDecode(rawContent) as Map;
+              final cap = (decoded['caption'] as String?)?.trim() ?? '';
+              displayContent = cap.isNotEmpty ? '📷 $cap' : '📷 Foto';
+            } catch (_) {
+              displayContent = '📷 Foto';
+            }
+          }
+          latestMessage[cId] = displayContent;
           latestMessageSender[cId] = row['sender_id']?.toString();
           latestMessageId[cId] = row['id']?.toString();
         }
@@ -800,7 +811,16 @@ class ChatService {
         return true;
       }).toList();
     } catch (_) {
-      return const [];
+      try {
+        final rows = await _client
+            .from('messages')
+            .select('id,conversation_id,sender_id,type,content,created_at')
+            .eq('conversation_id', conversationId)
+            .order('created_at', ascending: true);
+        return List<Map<String, dynamic>>.from(rows as List);
+      } catch (_) {
+        return const [];
+      }
     }
   }
 
@@ -908,17 +928,16 @@ class ChatService {
     String? caption,
   }) async {
     final cleanCaption = caption?.trim() ?? '';
-    final displayContent = cleanCaption.isNotEmpty ? '📷 $cleanCaption' : '📷 Foto';
+    final payload = jsonEncode({
+      'image_base64': imageBase64,
+      'caption': cleanCaption,
+    });
 
     await _client.from('messages').insert({
       'conversation_id': conversationId,
       'sender_id': _userId,
       'type': 'image',
-      'content': displayContent,
-      'metadata': {
-        'image_base64': imageBase64,
-        'caption': cleanCaption,
-      },
+      'content': payload,
     });
 
     try {
