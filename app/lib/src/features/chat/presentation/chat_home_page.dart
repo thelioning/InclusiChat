@@ -12,6 +12,7 @@ import '../../../app.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
+import '../../calls/data/call_manager.dart';
 import '../../calls/data/call_service.dart';
 import '../../calls/data/call_signaling_service.dart';
 import '../../update/update_service.dart';
@@ -62,25 +63,14 @@ class _ChatHomePageState extends State<ChatHomePage> {
 
     CallSignalingService().initializeUserChannel(
       incomingCallHandler: (event) {
-        if (_activeShowingCallId != event.callId) {
-          _activeShowingCallId = event.callId;
-          final nav = rootNavigatorKey.currentState ?? (mounted ? Navigator.of(context) : null);
-          nav?.push(
-            MaterialPageRoute<void>(
-              builder: (_) => CallScreen(
-                contactName: event.callerName,
-                avatarUrl: event.callerAvatar,
-                callerId: event.callerId,
-                callId: event.callId,
-                conversationId: event.conversationId,
-                callType: event.callType == 'video' ? CallType.video : CallType.audio,
-                isIncoming: true,
-              ),
-            ),
-          ).then((_) {
-            _activeShowingCallId = null;
-          });
-        }
+        CallManager.instance.showIncomingCall(
+          callId: event.callId,
+          callerName: event.callerName,
+          callerAvatar: event.callerAvatar,
+          callerId: event.callerId,
+          conversationId: event.conversationId,
+          callType: event.callType,
+        );
       },
     );
     Timer(const Duration(milliseconds: 1200), () {
@@ -99,26 +89,14 @@ class _ChatHomePageState extends State<ChatHomePage> {
     try {
       final incoming = await CallService().checkForIncomingCall();
       if (incoming != null) {
-        final callId = incoming['call_id']?.toString() ?? '';
-        if (_activeShowingCallId != callId) {
-          _activeShowingCallId = callId;
-          final nav = rootNavigatorKey.currentState ?? (mounted ? Navigator.of(context) : null);
-          nav?.push(
-            MaterialPageRoute<void>(
-              builder: (_) => CallScreen(
-                contactName: incoming['caller_name']?.toString() ?? 'Contacto',
-                avatarUrl: incoming['caller_avatar']?.toString(),
-                callerId: incoming['caller_id']?.toString(),
-                callId: callId,
-                conversationId: incoming['conversation_id']?.toString(),
-                callType: incoming['call_type'] == 'video' ? CallType.video : CallType.audio,
-                isIncoming: true,
-              ),
-            ),
-          ).then((_) {
-            _activeShowingCallId = null;
-          });
-        }
+        CallManager.instance.showIncomingCall(
+          callId: incoming['call_id']?.toString() ?? '',
+          callerName: incoming['caller_name']?.toString() ?? 'Contacto',
+          callerAvatar: incoming['caller_avatar']?.toString(),
+          callerId: incoming['caller_id']?.toString(),
+          conversationId: incoming['conversation_id']?.toString(),
+          callType: incoming['call_type'] == 'video' ? 'video' : 'audio',
+        );
       }
     } catch (_) {}
   }

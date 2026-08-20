@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../calls/data/call_manager.dart';
 import '../../calls/data/call_service.dart';
 import '../../calls/data/call_signaling_service.dart';
 import '../data/chat_service.dart';
@@ -57,6 +58,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    CallManager.instance.isCallActive = true;
     _isIncomingRinging = widget.isIncoming;
     _activeCallId = widget.callId ?? 'call_${DateTime.now().millisecondsSinceEpoch}';
     _activeConversationId = widget.conversationId;
@@ -70,7 +72,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Conectar a la sala de señalización de la llamada
+    // Unirse a la sala Realtime de la llamada
     _signaling.joinCallRoom(
       callId: _activeCallId,
       callAcceptedHandler: (id) {
@@ -104,14 +106,12 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       final targetId = widget.receiverUserId;
       if (targetId == null || targetId.isEmpty) return;
 
-      // Obtener o crear conversación directa
       String convId = _activeConversationId ?? '';
       if (convId.isEmpty) {
         convId = await _chatService.createDirectConversation(targetId);
         _activeConversationId = convId;
       }
 
-      // Obtener mi nombre de perfil
       String myName = 'Contacto';
       String? myAvatar;
       try {
@@ -120,8 +120,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         myAvatar = profile.avatarUrl;
       } catch (_) {}
 
-      // 1. Enviar señal Realtime directa al usuario destinatario
-      await _signaling.sendIncomingCallSignal(
+      // 1. Enviar señal Realtime
+      _signaling.sendIncomingCallSignal(
         receiverId: targetId,
         callId: _activeCallId,
         callerName: myName,
@@ -130,8 +130,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         conversationId: convId,
       );
 
-      // 2. Enviar mensaje de señal en la conversación como respaldo dual
-      await _callService.startCall(
+      // 2. Enviar señal en conversación
+      _callService.startCall(
         conversationId: convId,
         receiverId: targetId,
         callType: widget.callType == CallType.video ? 'video' : 'audio',
@@ -139,7 +139,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
       _startStatusPolling();
 
-      // Timeout si no contesta en 35 segundos
       _timeoutTimer = Timer(const Duration(seconds: 35), () {
         if (mounted && !_isConnected && !_hasEnded) {
           _handleCallTerminated('Sin respuesta', wasConnected: false);
@@ -152,7 +151,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
   void _startStatusPolling() {
     _statusPollTimer?.cancel();
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 750), (_) async {
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 700), (_) async {
       if (_hasEnded || _activeConversationId == null) return;
 
       final action = await _callService.getCallSignalState(
@@ -194,6 +193,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
     _signaling.leaveCallRoom();
+    CallManager.instance.isCallActive = false;
 
     if (mounted) {
       setState(() {
@@ -203,7 +203,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       });
     }
 
-    Future.delayed(const Duration(milliseconds: 1300), () {
+    Future.delayed(const Duration(milliseconds: 1100), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
@@ -224,6 +224,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _timeoutTimer?.cancel();
     _pulseController.dispose();
     _signaling.leaveCallRoom();
+    CallManager.instance.isCallActive = false;
     super.dispose();
   }
 
@@ -233,80 +234,75 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     return '$minutes:$seconds';
   }
 
-  Future<void> _answerCall() async {
+  void _answerCall() {
+    if (_hasEnded) return;
     _timeoutTimer?.cancel();
 
-    // 1. Enviar señal Realtime a la sala
-    await _signaling.sendAcceptSignal(_activeCallId);
+    // 1. Respuesta visual instantánea al toque
+    setState(() {
+      _isIncomingRinging = false;
+      _isConnected = true;
+      _statusMessage = 'Conectado';
+    });
+    _startTimer();
 
-    // 2. Enviar señal de aceptación en la conversación
+    // 2. Notificar al emisor inmediatamente
+    _signaling.sendAcceptSignal(_activeCallId);
     if (_activeConversationId != null) {
-      await _callService.acceptCall(
+      _callService.acceptCall(
         conversationId: _activeConversationId!,
         callId: _activeCallId,
       );
     }
-
-    if (mounted) {
-      setState(() {
-        _isIncomingRinging = false;
-        _isConnected = true;
-        _statusMessage = 'Conectado';
-      });
-      _startTimer();
-    }
   }
 
-  Future<void> _rejectIncomingCall() async {
+  void _rejectIncomingCall() {
     if (_hasEnded) return;
     _hasEnded = true;
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    CallManager.instance.isCallActive = false;
 
-    // 1. Enviar señal Realtime de rechazo a la sala
-    await _signaling.sendRejectSignal(_activeCallId);
+    // 1. Cierre visual instantáneo
+    Navigator.of(context).pop();
 
-    // 2. Enviar mensaje de rechazo en conversación
+    // 2. Notificar al emisor
+    _signaling.sendRejectSignal(_activeCallId);
     if (_activeConversationId != null) {
-      await _callService.rejectCall(
+      _callService.rejectCall(
         conversationId: _activeConversationId!,
         callId: _activeCallId,
       );
     }
-
     _signaling.leaveCallRoom();
-
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
   }
 
-  Future<void> _endCall() async {
+  void _endCall() {
     if (_hasEnded) return;
     _hasEnded = true;
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    CallManager.instance.isCallActive = false;
 
-    // 1. Enviar señal Realtime de finalización a la sala
-    await _signaling.sendEndSignal(_activeCallId);
+    final dur = _seconds;
+    final conn = _isConnected;
 
-    // 2. Enviar mensaje de finalización en conversación
+    // 1. Cierre visual instantáneo
+    Navigator.of(context).pop();
+
+    // 2. Notificar al otro usuario
+    _signaling.sendEndSignal(_activeCallId);
     if (_activeConversationId != null) {
-      await _callService.endCall(
+      _callService.endCall(
         conversationId: _activeConversationId!,
         callId: _activeCallId,
-        durationSeconds: _seconds,
-        wasConnected: _isConnected,
+        durationSeconds: dur,
+        wasConnected: conn,
       );
     }
-
     _signaling.leaveCallRoom();
-
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
   }
 
   @override
@@ -445,31 +441,19 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                       ? Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                FloatingActionButton(
-                                  heroTag: 'declineCallBtn',
-                                  backgroundColor: AppColors.error,
-                                  onPressed: _rejectIncomingCall,
-                                  child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text('Rechazar', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                              ],
+                            _CallControlButton(
+                              icon: Icons.call_end_rounded,
+                              label: 'Rechazar',
+                              backgroundColor: AppColors.error,
+                              iconColor: Colors.white,
+                              onTap: _rejectIncomingCall,
                             ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                FloatingActionButton(
-                                  heroTag: 'answerCallBtn',
-                                  backgroundColor: AppColors.success,
-                                  onPressed: _answerCall,
-                                  child: const Icon(Icons.call_rounded, color: Colors.white, size: 28),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text('Contestar', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                              ],
+                            _CallControlButton(
+                              icon: Icons.call_rounded,
+                              label: 'Contestar',
+                              backgroundColor: AppColors.success,
+                              iconColor: Colors.white,
+                              onTap: _answerCall,
                             ),
                           ],
                         )
@@ -495,12 +479,12 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                                 isActive: _isVideoEnabled,
                                 onPressed: () => setState(() => _isVideoEnabled = !_isVideoEnabled),
                               ),
-                            FloatingActionButton(
-                              heroTag: 'endCallBtn',
+                            _CallControlButton(
+                              icon: Icons.call_end_rounded,
+                              label: 'Colgar',
                               backgroundColor: AppColors.error,
-                              elevation: 4,
-                              onPressed: _endCall,
-                              child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
+                              iconColor: Colors.white,
+                              onTap: _endCall,
                             ),
                           ],
                         ),
@@ -510,6 +494,50 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CallControlButton extends StatelessWidget {
+  const _CallControlButton({
+    required this.icon,
+    required this.label,
+    required this.backgroundColor,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color backgroundColor;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: backgroundColor,
+          shape: const CircleBorder(),
+          elevation: 6,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox(
+              width: 64,
+              height: 64,
+              child: Icon(icon, color: iconColor, size: 30),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 }

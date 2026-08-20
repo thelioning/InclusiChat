@@ -515,25 +515,41 @@
           </ul>
         </div>
 
-        <!-- Versión 1.4.4 (Última Versión Actual) -->
-        <div class="update-card latest">
+        <!-- Versión 1.4.4 -->
+        <div class="update-card">
           <div class="update-header">
             <div class="update-version-wrap">
-              <span class="update-badge-latest">Última Versión</span>
+              <span class="update-badge">Estable</span>
               <h3 class="update-version">v1.4.4</h3>
             </div>
             <span class="update-date">20 de Agosto, 2026</span>
           </div>
-          <p class="update-summary">Arquitectura dual de señalización VoIP con salas dedicadas en tiempo real y navegación global de llamadas entrantes.</p>
+          <p class="update-summary">Arquitectura dual de señalización VoIP con salas dedicadas y navegador global.</p>
           <ul class="update-features">
-            <li><strong>Salas Dedicadas de Llamada (`room_call`):</strong> Canal bidireccional punto a punto con eventos inmediatos de aceptación, rechazo y finalización.</li>
-            <li><strong>Navegador Global de Llamadas:</strong> La pantalla de llamada entrante se muestra instantáneamente desde cualquier pantalla o pestaña de la aplicación.</li>
-            <li><strong>Suscripción Verificada:</strong> Transmisión de eventos de repique confirmada con el servidor antes del envío para cero pérdida de paquetes.</li>
+            <li><strong>Salas Dedicadas:</strong> Transmisión punto a punto de eventos.</li>
+            <li><strong>Navegador Global:</strong> Alerta visible en cualquier pantalla.</li>
+          </ul>
+        </div>
+
+        <!-- Versión 1.4.5 (Última Versión Actual) -->
+        <div class="update-card latest">
+          <div class="update-header">
+            <div class="update-version-wrap">
+              <span class="update-badge-latest">Última Versión</span>
+              <h3 class="update-version">v1.4.5</h3>
+            </div>
+            <span class="update-date">20 de Agosto, 2026</span>
+          </div>
+          <p class="update-summary">Respuesta táctil instantánea al contestar/rechazar/colgar, eliminación de esperas de red en la UI y control singleton para evitar pantallas superpuestas.</p>
+          <ul class="update-features">
+            <li><strong>Respuesta Táctil Inmediata:</strong> Al presionar 🟢 Contestar, la interfaz cambia al instante a "Conectado" y arranca el conteo en 0 milisegundos sin depender de la latencia de red.</li>
+            <li><strong>Control Singleton de Llamadas (`CallManager`):</strong> Previene de raíz la duplicación o superposición de pantallas de llamada, asegurando que los botones reciban el toque limpiamente.</li>
+            <li><strong>Cierre Instantáneo al Colgar/Rechazar:</strong> La llamada se cierra inmediatamente en pantalla al tocar 🔴 Rechazar o Colgar, despachando la señalización en segundo plano.</li>
           </ul>
           <div class="update-card-action">
-            <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.4/InclusiChat-v1.4.4.apk" class="btn-update-download">
+            <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.5/InclusiChat-v1.4.5.apk" class="btn-update-download">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              <span>Descargar Última Versión v1.4.4 APK (61 MB)</span>
+              <span>Descargar Última Versión v1.4.5 APK (61 MB)</span>
             </a>
           </div>
         </div>
@@ -554,7 +570,7 @@
         <div class="download-meta-info">
           <div class="meta-item">
             <span class="meta-label">Versión</span>
-            <span class="meta-val" id="download-version-tag">1.4.4 (Release Estable)</span>
+            <span class="meta-val" id="download-version-tag">1.4.5 (Release Estable)</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Plataforma</span>
@@ -567,11 +583,11 @@
         </div>
 
         <div class="download-btn-wrap">
-          <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.4/InclusiChat-v1.4.4.apk" target="_blank" class="btn-download-main" id="btn-download-apk">
+          <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.5/InclusiChat-v1.4.5.apk" target="_blank" class="btn-download-main" id="btn-download-apk">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <div class="btn-download-text">
               <span class="btn-small-text">Descargar paquete oficial</span>
-              <span class="btn-large-text" id="download-apk-text">InclusiChat-v1.4.4.apk (61 MB)</span>
+              <span class="btn-large-text" id="download-apk-text">InclusiChat-v1.4.5.apk (61 MB)</span>
             </div>
           </a>
         </div>
@@ -579,7 +595,7 @@
         <div class="install-steps">
           <h4 class="steps-title">Guía rápida de instalación:</h4>
           <ol class="steps-list">
-            <li>Descarga el archivo <code id="download-step-filename">InclusiChat-v1.4.4.apk</code> en tu teléfono.</li>
+            <li>Descarga el archivo <code id="download-step-filename">InclusiChat-v1.4.5.apk</code> en tu teléfono.</li>
             <li>Abre el archivo y pulsa <strong>Instalar</strong> (habilita la opción "Permitir desde esta fuente" si tu dispositivo lo solicita).</li>
             <li>Abre InclusiChat, regístrate con tu correo y elige tu <strong>@alias</strong> único.</li>
           </ol>
