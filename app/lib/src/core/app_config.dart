@@ -1,7 +1,7 @@
 class AppConfig {
   static const String appName = 'InclusiChat';
-  static const String version = '1.4.5';
-  static const int buildNumber = 38;
+  static const String version = '1.4.6';
+  static const int buildNumber = 39;
   static const String releaseType = 'Release Estable';
   static const String authorName = 'Ermógenes Rodríguez Fernández';
   static const String organization = 'Baremetal Academy';

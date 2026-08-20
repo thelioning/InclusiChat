@@ -2,7 +2,7 @@ name: inclusichat
 description: "Mensajería privada e inclusiva para conectar con libertad."
 publish_to: 'none'
 
-version: 1.4.5+38
+version: 1.4.6+39
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

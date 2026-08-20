@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../theme/app_colors.dart';
 import '../../calls/data/call_manager.dart';
@@ -41,6 +42,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   Timer? _timer;
   Timer? _statusPollTimer;
   Timer? _timeoutTimer;
+  Timer? _vibrateTimer;
   int _seconds = 0;
   bool _isConnected = false;
   bool _isIncomingRinging = false;
@@ -97,8 +99,30 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       _initiateOutgoingCall();
     } else {
       _statusMessage = 'Llamada de voz entrante...';
+      _startRingingVibration();
       _startStatusPolling();
     }
+  }
+
+  void _startRingingVibration() {
+    _vibrateTimer?.cancel();
+    _vibrateTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
+      if (_hasEnded || _isConnected || !_isIncomingRinging) {
+        _vibrateTimer?.cancel();
+        return;
+      }
+      try {
+        HapticFeedback.heavyImpact();
+      } catch (_) {}
+    });
+    try {
+      HapticFeedback.heavyImpact();
+    } catch (_) {}
+  }
+
+  void _stopRingingVibration() {
+    _vibrateTimer?.cancel();
+    _vibrateTimer = null;
   }
 
   Future<void> _initiateOutgoingCall() async {
@@ -176,6 +200,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
   void _onRemoteAccepted() {
     _timeoutTimer?.cancel();
+    _stopRingingVibration();
     if (mounted) {
       setState(() {
         _isConnected = true;
@@ -192,6 +217,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _stopRingingVibration();
     _signaling.leaveCallRoom();
     CallManager.instance.isCallActive = false;
 
@@ -222,6 +248,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _stopRingingVibration();
     _pulseController.dispose();
     _signaling.leaveCallRoom();
     CallManager.instance.isCallActive = false;
@@ -237,6 +264,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   void _answerCall() {
     if (_hasEnded) return;
     _timeoutTimer?.cancel();
+    _stopRingingVibration();
 
     // 1. Respuesta visual instantánea al toque
     setState(() {
@@ -262,6 +290,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _stopRingingVibration();
     CallManager.instance.isCallActive = false;
 
     // 1. Cierre visual instantáneo
@@ -284,6 +313,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _stopRingingVibration();
     CallManager.instance.isCallActive = false;
 
     final dur = _seconds;
