@@ -11,8 +11,10 @@ import '../../security/presentation/camouflage_settings_page.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
+import '../../calls/data/call_signaling_service.dart';
 import '../../update/update_service.dart';
 import 'about_page.dart';
+import 'call_screen.dart';
 import 'calls_page.dart';
 import 'contacts_page.dart';
 import 'conversation_page.dart';
@@ -52,6 +54,25 @@ class _ChatHomePageState extends State<ChatHomePage> {
     _chatService.loadUserProfile();
     _fetchHomeData(initial: true);
     _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
+    CallSignalingService().initialize(
+      incomingCallHandler: (event) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CallScreen(
+                contactName: event.callerName,
+                avatarUrl: event.callerAvatar,
+                callerId: event.callerId,
+                callId: event.callId,
+                conversationId: event.conversationId,
+                callType: event.callType == 'video' ? CallType.video : CallType.audio,
+                isIncoming: true,
+              ),
+            ),
+          );
+        }
+      },
+    );
     Timer(const Duration(milliseconds: 1200), () {
       if (mounted) UpdateService.checkForUpdates(context);
     });
