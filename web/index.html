@@ -547,25 +547,40 @@
           </ul>
         </div>
 
-        <!-- Versión 1.4.6 (Última Versión Actual) -->
-        <div class="update-card latest">
+        <!-- Versión 1.4.6 -->
+        <div class="update-card">
           <div class="update-header">
             <div class="update-version-wrap">
-              <span class="update-badge-latest">Última Versión</span>
+              <span class="update-badge">Estable</span>
               <h3 class="update-version">v1.4.6</h3>
             </div>
             <span class="update-date">20 de Agosto, 2026</span>
           </div>
-          <p class="update-summary">Vibración continua rítmica durante el repique de llamada entrante, permisos de despertar de pantalla (Wake Lock) y Foreground VoIP.</p>
+          <p class="update-summary">Permisos VoIP de segundo plano y despertar de pantalla.</p>
           <ul class="update-features">
-            <li><strong>Vibración Continua en Repique:</strong> El teléfono vibra rítmicamente cada 1.2 segundos mientras suena la llamada entrante hasta que se contesta o rechaza.</li>
-            <li><strong>Permisos VoIP y Despertar de Pantalla:</strong> Integración de permisos Android para `VIBRATE`, `WAKE_LOCK`, `USE_FULL_SCREEN_INTENT` y `FOREGROUND_SERVICE_PHONE_CALL`.</li>
-            <li><strong>Detención Limpia:</strong> La vibración se apaga al instante en el mismo milisegundo en que se pulsa 🟢 Contestar, 🔴 Rechazar o Colgar.</li>
+            <li><strong>Permisos VoIP:</strong> Soporte para llamadas en segundo plano y wake lock.</li>
+          </ul>
+        </div>
+
+        <!-- Versión 1.4.7 (Última Versión Actual) -->
+        <div class="update-card latest">
+          <div class="update-header">
+            <div class="update-version-wrap">
+              <span class="update-badge-latest">Última Versión</span>
+              <h3 class="update-version">v1.4.7</h3>
+            </div>
+            <span class="update-date">20 de Agosto, 2026</span>
+          </div>
+          <p class="update-summary">Integración de Timbre Oficial del Sistema y Motor de Vibración por Hardware Nativo de Android (RingtoneManager & VibratorManager).</p>
+          <ul class="update-features">
+            <li><strong>Timbre Oficial de Android:</strong> Al recibir una llamada entrante, suena el tono oficial del teléfono con volumen y perfil del sistema respetando modo timbre/vibrador/silencio.</li>
+            <li><strong>Vibrador Real por Hardware:</strong> Activa el motor de vibración del teléfono en bucle de repique mediante llamada directa al hardware nativo.</li>
+            <li><strong>Tono de Repique Saliente:</strong> Reproduce el tono estándar de llamada ("Tuuu... tuuu...") en el auricular del emisor mientras espera respuesta.</li>
           </ul>
           <div class="update-card-action">
-            <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.6/InclusiChat-v1.4.6.apk" class="btn-update-download">
+            <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.7/InclusiChat-v1.4.7.apk" class="btn-update-download">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              <span>Descargar Última Versión v1.4.6 APK (61 MB)</span>
+              <span>Descargar Última Versión v1.4.7 APK (61 MB)</span>
             </a>
           </div>
         </div>
@@ -586,7 +601,7 @@
         <div class="download-meta-info">
           <div class="meta-item">
             <span class="meta-label">Versión</span>
-            <span class="meta-val" id="download-version-tag">1.4.6 (Release Estable)</span>
+            <span class="meta-val" id="download-version-tag">1.4.7 (Release Estable)</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Plataforma</span>
@@ -599,11 +614,11 @@
         </div>
 
         <div class="download-btn-wrap">
-          <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.6/InclusiChat-v1.4.6.apk" target="_blank" class="btn-download-main" id="btn-download-apk">
+          <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.7/InclusiChat-v1.4.7.apk" target="_blank" class="btn-download-main" id="btn-download-apk">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <div class="btn-download-text">
               <span class="btn-small-text">Descargar paquete oficial</span>
-              <span class="btn-large-text" id="download-apk-text">InclusiChat-v1.4.6.apk (61 MB)</span>
+              <span class="btn-large-text" id="download-apk-text">InclusiChat-v1.4.7.apk (61 MB)</span>
             </div>
           </a>
         </div>
@@ -611,7 +626,7 @@
         <div class="install-steps">
           <h4 class="steps-title">Guía rápida de instalación:</h4>
           <ol class="steps-list">
-            <li>Descarga el archivo <code id="download-step-filename">InclusiChat-v1.4.6.apk</code> en tu teléfono.</li>
+            <li>Descarga el archivo <code id="download-step-filename">InclusiChat-v1.4.7.apk</code> en tu teléfono.</li>
             <li>Abre el archivo y pulsa <strong>Instalar</strong> (habilita la opción "Permitir desde esta fuente" si tu dispositivo lo solicita).</li>
             <li>Abre InclusiChat, regístrate con tu correo y elige tu <strong>@alias</strong> único.</li>
           </ol>

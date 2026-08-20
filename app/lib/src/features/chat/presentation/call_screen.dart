@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../calls/data/call_audio_service.dart';
 import '../../calls/data/call_manager.dart';
 import '../../calls/data/call_service.dart';
 import '../../calls/data/call_signaling_service.dart';
@@ -96,9 +97,11 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
     if (!_isIncomingRinging) {
       _statusMessage = 'Repicando de forma segura...';
+      CallAudioService.startOutgoingDialTone();
       _initiateOutgoingCall();
     } else {
       _statusMessage = 'Llamada de voz entrante...';
+      CallAudioService.startIncomingRinging();
       _startRingingVibration();
       _startStatusPolling();
     }
@@ -123,6 +126,8 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   void _stopRingingVibration() {
     _vibrateTimer?.cancel();
     _vibrateTimer = null;
+    CallAudioService.stopIncomingRinging();
+    CallAudioService.stopOutgoingDialTone();
   }
 
   Future<void> _initiateOutgoingCall() async {
