@@ -5,6 +5,7 @@ import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
 import '../../security/presentation/camouflage_settings_page.dart';
 import '../../security/presentation/security_settings_page.dart';
+import '../../update/update_service.dart';
 import '../data/chat_service.dart';
 import '../data/invite_service.dart';
 import 'about_page.dart';
@@ -186,6 +187,12 @@ class _SettingsPageState extends State<SettingsPage> {
                       MaterialPageRoute<void>(builder: (_) => const UserGuidePage()),
                     );
                   },
+                ),
+                _SettingsTile(
+                  icon: Icons.system_update_rounded,
+                  title: 'Buscar actualizaciones',
+                  subtitle: 'Comprobar si hay una nueva versión disponible',
+                  onTap: () => UpdateService.checkForUpdates(context, forceShow: true),
                 ),
                 _SettingsTile(
                   icon: Icons.info_outline_rounded,

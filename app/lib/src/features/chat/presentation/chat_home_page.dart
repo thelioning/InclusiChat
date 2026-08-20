@@ -11,6 +11,7 @@ import '../../security/presentation/camouflage_settings_page.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
+import '../../update/update_service.dart';
 import 'about_page.dart';
 import 'calls_page.dart';
 import 'contacts_page.dart';
@@ -51,6 +52,9 @@ class _ChatHomePageState extends State<ChatHomePage> {
     _chatService.loadUserProfile();
     _fetchHomeData(initial: true);
     _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
+    Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) UpdateService.checkForUpdates(context);
+    });
   }
 
   @override
