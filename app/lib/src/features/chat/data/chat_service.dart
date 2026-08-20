@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ConversationSummary {
@@ -265,12 +267,19 @@ class ChatService {
         if (!latestMessage.containsKey(cId)) {
           final rawContent = row['content'] as String?;
           String? displayContent = rawContent;
-          if (rawContent != null && rawContent.startsWith('{') && rawContent.contains('image_base64')) {
+          if (rawContent != null && rawContent.startsWith('{') && (rawContent.contains('image_url') || rawContent.contains('image_base64'))) {
             try {
               final decoded = jsonDecode(rawContent) as Map;
               final cap = (decoded['caption'] as String?)?.trim() ?? '';
               displayContent = cap.isNotEmpty ? '📷 $cap' : '📷 Foto';
             } catch (_) {
+              displayContent = '📷 Foto';
+            }
+          } else if (rawContent != null && rawContent.contains('[IMAGE_URL]')) {
+            final parts = rawContent.split('|||');
+            if (parts.length > 1 && parts[1].trim().isNotEmpty) {
+              displayContent = '📷 ${parts[1].trim()}';
+            } else {
               displayContent = '📷 Foto';
             }
           }
@@ -923,14 +932,36 @@ class ChatService {
     } catch (_) {}
   }
 
+  Future<String> uploadImageFile(String filePath) async {
+    try {
+      final uri = Uri.parse('https://catbox.moe/user/api.php');
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['reqtype'] = 'fileupload'
+        ..files.add(await http.MultipartFile.fromPath('fileToUpload', filePath));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200) {
+        final body = response.body.trim();
+        if (body.startsWith('http')) {
+          return body;
+        }
+      }
+      throw Exception('No se pudo subir la imagen al servidor');
+    } catch (e) {
+      debugPrint('Upload error: $e');
+      rethrow;
+    }
+  }
+
   Future<void> sendImageMessage({
     required String conversationId,
-    required String imageBase64,
+    required String imageUrl,
     String? caption,
   }) async {
     final cleanCaption = caption?.trim() ?? '';
     final payload = jsonEncode({
-      'image_base64': imageBase64,
+      'image_url': imageUrl,
       'caption': cleanCaption,
     });
 
@@ -951,9 +982,11 @@ class ChatService {
   Future<void> sendImageToMultipleDestinations({
     required List<String> contactUserIds,
     required List<String> conversationIds,
-    required String imageBase64,
+    required String imagePath,
     String? caption,
   }) async {
+    final imageUrl = await uploadImageFile(imagePath);
+
     final targetConvIds = <String>{...conversationIds};
     for (final uId in contactUserIds) {
       final convId = await createDirectConversation(uId);
@@ -962,7 +995,7 @@ class ChatService {
     for (final convId in targetConvIds) {
       await sendImageMessage(
         conversationId: convId,
-        imageBase64: imageBase64,
+        imageUrl: imageUrl,
         caption: caption,
       );
     }

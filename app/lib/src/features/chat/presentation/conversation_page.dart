@@ -585,19 +585,18 @@ class _ConversationPageState extends State<ConversationPage> {
       final file = await picker.pickImage(
         source: source,
         imageQuality: 50,
-        maxWidth: 700,
-        maxHeight: 700,
+        maxWidth: 800,
+        maxHeight: 800,
       );
       if (file == null) return;
 
       setState(() => _sending = true);
-      final bytes = await File(file.path).readAsBytes();
-      final base64String = base64Encode(bytes);
+      final imageUrl = await _service.uploadImageFile(file.path);
       final caption = _controller.text.trim();
 
       await _service.sendImageMessage(
         conversationId: widget.conversationId,
-        imageBase64: base64String,
+        imageUrl: imageUrl,
         caption: caption.isNotEmpty ? caption : null,
       );
       _controller.clear();
@@ -831,7 +830,7 @@ class _MessageBubble extends StatelessWidget {
   final String? receiptStatus;
   final VoidCallback onLongPress;
 
-  void _openFullPhoto(BuildContext context, String imageBase64) {
+  void _openFullPhoto(BuildContext context, {String? imageUrl, String? imageBase64}) {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -841,10 +840,23 @@ class _MessageBubble extends StatelessWidget {
           children: [
             Positioned.fill(
               child: InteractiveViewer(
-                child: Image.memory(
-                  base64Decode(imageBase64),
-                  fit: BoxFit.contain,
-                ),
+                minScale: 0.8,
+                maxScale: 4.0,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (_, child, progress) {
+                          if (progress == null) return child;
+                          return const Center(
+                            child: CircularProgressIndicator(color: AppColors.primary),
+                          );
+                        },
+                      )
+                    : Image.memory(
+                        base64Decode(imageBase64!),
+                        fit: BoxFit.contain,
+                      ),
               ),
             ),
             Positioned(
@@ -866,22 +878,31 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String? imageUrl;
     String? imageBase64;
     String? caption;
     String displayContent = content;
 
-    if (content.startsWith('{') && content.contains('image_base64')) {
+    if (content.startsWith('{') && (content.contains('image_url') || content.contains('image_base64'))) {
       try {
         final decoded = jsonDecode(content) as Map;
+        imageUrl = decoded['image_url'] as String?;
         imageBase64 = decoded['image_base64'] as String?;
         caption = decoded['caption'] as String?;
       } catch (_) {}
-    } else if (metadata != null && metadata!['image_base64'] != null) {
+    } else if (content.contains('[IMAGE_URL]')) {
+      final clean = content.replaceAll('📷 [IMAGE_URL]', '').replaceAll('[IMAGE_URL]', '');
+      final parts = clean.split('|||');
+      imageUrl = parts[0].trim();
+      if (parts.length > 1) caption = parts[1].trim();
+    } else if (metadata != null) {
+      imageUrl = metadata!['image_url'] as String?;
       imageBase64 = metadata!['image_base64'] as String?;
       caption = metadata!['caption'] as String?;
     }
 
-    final hasImage = imageBase64 != null && imageBase64.isNotEmpty;
+    final hasImage = (imageUrl != null && imageUrl.isNotEmpty) ||
+                     (imageBase64 != null && imageBase64.isNotEmpty);
     final cleanCaption = (caption != null && caption.isNotEmpty)
         ? caption
         : (hasImage
@@ -911,18 +932,41 @@ class _MessageBubble extends StatelessWidget {
             children: [
               if (hasImage) ...[
                 GestureDetector(
-                  onTap: () => _openFullPhoto(context, imageBase64!),
+                  onTap: () => _openFullPhoto(context, imageUrl: imageUrl, imageBase64: imageBase64),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(
-                      base64Decode(imageBase64!),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: 220,
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
-                      ),
-                    ),
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 220,
+                            loadingBuilder: (ctx, child, progress) {
+                              if (progress == null) return child;
+                              return Container(
+                                height: 220,
+                                color: Colors.black26,
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
+                            ),
+                          )
+                        : Image.memory(
+                            base64Decode(imageBase64!),
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 220,
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
+                            ),
+                          ),
                   ),
                 ),
                 if (cleanCaption.isNotEmpty) const SizedBox(height: 6),

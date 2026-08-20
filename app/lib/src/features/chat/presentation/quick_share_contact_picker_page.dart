@@ -94,15 +94,12 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
     setState(() => _sending = true);
 
     try {
-      final file = File(widget.imagePath);
-      final bytes = await file.readAsBytes();
-      final imageBase64 = base64Encode(bytes);
       final caption = _captionController.text.trim();
 
       await _chatService.sendImageToMultipleDestinations(
         contactUserIds: _selectedContactUserIds.toList(),
         conversationIds: _selectedConversationIds.toList(),
-        imageBase64: imageBase64,
+        imagePath: widget.imagePath,
         caption: caption.isNotEmpty ? caption : null,
       );
 

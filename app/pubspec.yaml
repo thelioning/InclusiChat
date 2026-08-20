@@ -2,7 +2,7 @@ name: inclusichat
 description: "Mensajería privada e inclusiva para conectar con libertad."
 publish_to: 'none'
 
-version: 1.2.8+29
+version: 1.2.9+30
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -16,6 +16,7 @@ dependencies:
   url_launcher: ^6.3.1
   shared_preferences: ^2.5.3
   image_picker: ^1.1.2
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
