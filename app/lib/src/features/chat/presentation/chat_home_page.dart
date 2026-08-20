@@ -8,11 +8,9 @@ import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
 import '../../security/presentation/camouflage_screen.dart';
 import '../../security/presentation/camouflage_settings_page.dart';
-import '../../security/presentation/security_settings_page.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
-import '../data/invite_service.dart';
 import 'about_page.dart';
 import 'calls_page.dart';
 import 'contacts_page.dart';
@@ -761,32 +759,6 @@ class _FilterChip extends StatelessWidget {
               ? AppColors.primary
               : AppColors.surfaceRaised,
         ),
-      ),
-    );
-  }
-}
-
-class _RetryState extends StatelessWidget {
-  const _RetryState({required this.onRefresh});
-
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.cloud_off_rounded, size: 48),
-          const SizedBox(height: 12),
-          const Text('No se pudieron cargar las conversaciones.'),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Reintentar'),
-          ),
-        ],
       ),
     );
   }

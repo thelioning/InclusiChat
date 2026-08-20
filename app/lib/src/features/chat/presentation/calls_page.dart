@@ -34,7 +34,7 @@ class _CallsPageState extends State<CallsPage> {
   Future<void> _loadContacts({bool initial = false}) async {
     if (initial && mounted) setState(() => _isLoading = true);
     try {
-      final contacts = await _chatService.loadAcceptedContacts();
+      final contacts = await _chatService.loadContacts();
       if (mounted) {
         setState(() {
           _contacts = contacts;

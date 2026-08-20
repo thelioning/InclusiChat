@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
 import '../../auth/data/auth_service.dart';
+import '../../security/presentation/camouflage_settings_page.dart';
+import '../../security/presentation/security_settings_page.dart';
 import '../data/chat_service.dart';
 import '../data/invite_service.dart';
 import 'about_page.dart';
-import 'camouflage_settings_page.dart';
 import 'profile_settings_page.dart';
-import 'security_settings_page.dart';
 import 'user_guide_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -19,7 +19,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _chatService = ChatService();
-  UserProfile? _profile;
+  UserProfileData? _profile;
   bool _isLoading = true;
 
   @override
@@ -174,7 +174,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   iconColor: const Color(0xFF25D366),
                   title: 'Invitar amigos por WhatsApp',
                   subtitle: 'Comparte tu @alias para conectar en InclusiChat',
-                  onTap: () => InviteService.inviteViaWhatsApp(username: _profile?.username),
+                  onTap: () => InviteService.inviteViaWhatsApp(customUsername: _profile?.username),
                 ),
                 _SettingsTile(
                   icon: Icons.menu_book_rounded,
