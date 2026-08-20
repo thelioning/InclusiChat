@@ -484,25 +484,41 @@
           </ul>
         </div>
 
-        <!-- Versión 1.4.2 (Última Versión Actual) -->
-        <div class="update-card latest">
+        <!-- Versión 1.4.2 -->
+        <div class="update-card">
           <div class="update-header">
             <div class="update-version-wrap">
-              <span class="update-badge-latest">Última Versión</span>
+              <span class="update-badge">Estable</span>
               <h3 class="update-version">v1.4.2</h3>
             </div>
             <span class="update-date">20 de Agosto, 2026</span>
           </div>
-          <p class="update-summary">Sincronización bidireccional instantánea de llamadas: detección inmediata de contestado/rechazado entre teléfonos y transición a modo comunicación.</p>
+          <p class="update-summary">Sincronización bidireccional instantánea de llamadas: detección inmediata de contestado/rechazado entre teléfonos.</p>
           <ul class="update-features">
-            <li><strong>Detección Inmediata de Contestado:</strong> En el instante en que el receptor presiona 🟢 Contestar, el emisor cambia de "Repicando..." a "Conectado" en milisegundos e inicia la comunicación de voz.</li>
-            <li><strong>Rechazo Sincronizado en Vivo:</strong> Si el destinatario rechaza la llamada, el emisor recibe el aviso instantáneo de "Llamada rechazada" y detiene el timbre.</li>
-            <li><strong>Monitoreo Híbrido Garantizado:</strong> Doble canal WebSocket y sesión en base de datos para asegurar cero llamadas perdidas por problemas de red.</li>
+            <li><strong>Detección Inmediata:</strong> Transición de estado a "Conectado" en milisegundos.</li>
+            <li><strong>Rechazo Sincronizado:</strong> Cierre automático del timbre al rechazar.</li>
+          </ul>
+        </div>
+
+        <!-- Versión 1.4.3 (Última Versión Actual) -->
+        <div class="update-card latest">
+          <div class="update-header">
+            <div class="update-version-wrap">
+              <span class="update-badge-latest">Última Versión</span>
+              <h3 class="update-version">v1.4.3</h3>
+            </div>
+            <span class="update-date">20 de Agosto, 2026</span>
+          </div>
+          <p class="update-summary">Señalización de llamadas directa y garantizada sobre el canal de mensajería cifrado: recepción en vivo 100% infalible entre teléfonos.</p>
+          <ul class="update-features">
+            <li><strong>Recepción de Llamada 100% Garantizada:</strong> La señalización viaja sobre el canal de mensajería probado y verificado, garantizando que el receptor vea la pantalla de llamada entrante al instante.</li>
+            <li><strong>Sincronización de Conexión Total:</strong> Al presionar 🟢 Contestar, ambos teléfonos entran en modo comunicación simultáneo con conteo de duración activo.</li>
+            <li><strong>Filtrado Limpio en Chat:</strong> Las señales transitorias de llamada se procesan en segundo plano y solo se conserva el resumen estético de la llamada terminada.</li>
           </ul>
           <div class="update-card-action">
-            <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.2/InclusiChat-v1.4.2.apk" class="btn-update-download">
+            <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.3/InclusiChat-v1.4.3.apk" class="btn-update-download">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              <span>Descargar Última Versión v1.4.2 APK (61 MB)</span>
+              <span>Descargar Última Versión v1.4.3 APK (61 MB)</span>
             </a>
           </div>
         </div>
@@ -523,7 +539,7 @@
         <div class="download-meta-info">
           <div class="meta-item">
             <span class="meta-label">Versión</span>
-            <span class="meta-val" id="download-version-tag">1.4.2 (Release Estable)</span>
+            <span class="meta-val" id="download-version-tag">1.4.3 (Release Estable)</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Plataforma</span>
@@ -536,11 +552,11 @@
         </div>
 
         <div class="download-btn-wrap">
-          <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.2/InclusiChat-v1.4.2.apk" target="_blank" class="btn-download-main" id="btn-download-apk">
+          <a href="https://github.com/thelioning/InclusiChat/releases/download/v1.4.3/InclusiChat-v1.4.3.apk" target="_blank" class="btn-download-main" id="btn-download-apk">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <div class="btn-download-text">
               <span class="btn-small-text">Descargar paquete oficial</span>
-              <span class="btn-large-text" id="download-apk-text">InclusiChat-v1.4.2.apk (61 MB)</span>
+              <span class="btn-large-text" id="download-apk-text">InclusiChat-v1.4.3.apk (61 MB)</span>
             </div>
           </a>
         </div>
@@ -548,7 +564,7 @@
         <div class="install-steps">
           <h4 class="steps-title">Guía rápida de instalación:</h4>
           <ol class="steps-list">
-            <li>Descarga el archivo <code id="download-step-filename">InclusiChat-v1.4.2.apk</code> en tu teléfono.</li>
+            <li>Descarga el archivo <code id="download-step-filename">InclusiChat-v1.4.3.apk</code> en tu teléfono.</li>
             <li>Abre el archivo y pulsa <strong>Instalar</strong> (habilita la opción "Permitir desde esta fuente" si tu dispositivo lo solicita).</li>
             <li>Abre InclusiChat, regístrate con tu correo y elige tu <strong>@alias</strong> único.</li>
           </ol>

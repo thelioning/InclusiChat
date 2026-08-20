@@ -281,6 +281,13 @@ class _ConversationPageState extends State<ConversationPage> {
                       final messages = <Map<String, dynamic>>[];
                       for (final m in rawMessages) {
                         final id = m['id'] as String?;
+                        final meta = m['metadata'];
+                        if (meta is Map && meta['call_signal'] == true) {
+                          final action = meta['action'] as String?;
+                          if (action != 'end') {
+                            continue;
+                          }
+                        }
                         if (id != null && seenIds.add(id)) {
                           messages.add(m);
                         }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
 import '../../calls/data/call_service.dart';
-import '../../calls/data/call_signaling_service.dart';
+import '../data/chat_service.dart';
 
 enum CallType { audio, video }
 
@@ -46,9 +46,10 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   bool _isSpeakerOn = true;
   bool _isVideoEnabled = true;
   final _callService = CallService();
-  final _signaling = CallSignalingService();
+  final _chatService = ChatService();
   bool _hasEnded = false;
   String? _activeCallId;
+  String? _activeConversationId;
   String _statusMessage = '';
 
   @override
@@ -56,6 +57,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     super.initState();
     _isIncomingRinging = widget.isIncoming;
     _activeCallId = widget.callId;
+    _activeConversationId = widget.conversationId;
 
     _pulseController = AnimationController(
       vsync: this,
@@ -76,55 +78,53 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _initiateOutgoingCall() async {
-    final targetId = widget.receiverUserId;
-    if (targetId == null || targetId.isEmpty) return;
+    try {
+      final targetId = widget.receiverUserId;
+      if (targetId == null || targetId.isEmpty) return;
 
-    // Crear sesión en base de datos
-    final callId = await _callService.createCallSession(
-      receiverId: targetId,
-      conversationId: widget.conversationId,
-      callType: widget.callType == CallType.video ? 'video' : 'audio',
-    );
-
-    if (!mounted) return;
-
-    if (callId != null) {
-      _activeCallId = callId;
-    }
-
-    // Enviar señal WebSocket de respaldo
-    if (_activeCallId != null) {
-      await _signaling.sendIncomingCall(
-        receiverId: targetId,
-        callId: _activeCallId!,
-        callerName: widget.contactName,
-        callerAvatar: widget.avatarUrl,
-        callType: widget.callType == CallType.video ? 'video' : 'audio',
-        conversationId: widget.conversationId,
-      );
-    }
-
-    // Monitorear en tiempo real si el receptor contesta o rechaza
-    _listenToRemoteCallState();
-
-    // Timeout de 35s si no contesta
-    _timeoutTimer = Timer(const Duration(seconds: 35), () {
-      if (mounted && !_isConnected && !_hasEnded) {
-        _handleCallTerminated('Sin respuesta', wasConnected: false);
+      // Asegurar ID de conversación directa
+      String convId = _activeConversationId ?? '';
+      if (convId.isEmpty) {
+        convId = await _chatService.createDirectConversation(targetId);
+        _activeConversationId = convId;
       }
-    });
+
+      final callId = await _callService.startCall(
+        conversationId: convId,
+        receiverId: targetId,
+        callType: widget.callType == CallType.video ? 'video' : 'audio',
+      );
+
+      if (!mounted) return;
+      _activeCallId = callId;
+
+      _listenToRemoteCallState();
+
+      // Timeout si no contesta en 35 segundos
+      _timeoutTimer = Timer(const Duration(seconds: 35), () {
+        if (mounted && !_isConnected && !_hasEnded) {
+          _handleCallTerminated('Sin respuesta', wasConnected: false);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error initiating outgoing call: $e');
+    }
   }
 
   void _listenToRemoteCallState() {
     _statusPollTimer?.cancel();
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 900), (_) async {
-      if (_hasEnded || _activeCallId == null) return;
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 800), (_) async {
+      if (_hasEnded || _activeCallId == null || _activeConversationId == null) return;
 
-      final currentStatus = await _callService.getCallStatus(_activeCallId!);
+      final action = await _callService.getCallSignalState(
+        conversationId: _activeConversationId!,
+        callId: _activeCallId!,
+      );
+
       if (!mounted || _hasEnded) return;
 
-      if (currentStatus == 'accepted' && !_isConnected) {
-        // ¡El receptor contestó la llamada!
+      if (action == 'accept' && !_isConnected) {
+        // Receptor contestó
         _timeoutTimer?.cancel();
         setState(() {
           _isConnected = true;
@@ -132,12 +132,15 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
           _statusMessage = 'Conectado';
         });
         _startTimer();
-      } else if (currentStatus == 'rejected') {
-        // ¡El receptor rechazó la llamada!
+      } else if (action == 'reject') {
+        // Receptor rechazó
         _handleCallTerminated('Llamada rechazada', wasConnected: false);
-      } else if (currentStatus == 'completed' || currentStatus == 'missed') {
-        // La otra parte finalizó la llamada
+      } else if (action == 'end' && !_isIncomingRinging) {
+        // Otra parte colgó
         _handleCallTerminated('Llamada finalizada', wasConnected: _isConnected);
+      } else if (action == 'end' && _isIncomingRinging) {
+        // Emisor canceló antes de que contestaran
+        _handleCallTerminated('Llamada cancelada', wasConnected: false);
       }
     });
   }
@@ -155,16 +158,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         _isConnected = false;
         _isIncomingRinging = false;
       });
-    }
-
-    if (_activeCallId != null) {
-      _callService.endCall(
-        callId: _activeCallId!,
-        conversationId: widget.conversationId,
-        callType: widget.callType == CallType.video ? 'video' : 'audio',
-        durationSeconds: _seconds,
-        wasConnected: wasConnected,
-      );
     }
 
     Future.delayed(const Duration(milliseconds: 1400), () {
@@ -198,14 +191,9 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
   Future<void> _answerCall() async {
     _timeoutTimer?.cancel();
-    if (_activeCallId != null) {
-      await _callService.acceptCall(_activeCallId!);
-    }
-
-    final callerId = widget.callerId ?? widget.receiverUserId;
-    if (callerId != null && callerId.isNotEmpty && _activeCallId != null) {
-      await _signaling.sendCallAccepted(
-        callerId: callerId,
+    if (_activeConversationId != null && _activeCallId != null) {
+      await _callService.acceptCall(
+        conversationId: _activeConversationId!,
         callId: _activeCallId!,
       );
     }
@@ -227,14 +215,9 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
 
-    if (_activeCallId != null) {
-      await _callService.rejectCall(_activeCallId!);
-    }
-
-    final callerId = widget.callerId ?? widget.receiverUserId;
-    if (callerId != null && callerId.isNotEmpty && _activeCallId != null) {
-      await _signaling.sendCallRejected(
-        callerId: callerId,
+    if (_activeConversationId != null && _activeCallId != null) {
+      await _callService.rejectCall(
+        conversationId: _activeConversationId!,
         callId: _activeCallId!,
       );
     }
@@ -251,21 +234,12 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
 
-    if (_activeCallId != null) {
+    if (_activeConversationId != null && _activeCallId != null) {
       await _callService.endCall(
+        conversationId: _activeConversationId!,
         callId: _activeCallId!,
-        conversationId: widget.conversationId,
-        callType: widget.callType == CallType.video ? 'video' : 'audio',
         durationSeconds: _seconds,
         wasConnected: _isConnected,
-      );
-    }
-
-    final targetId = widget.isIncoming ? widget.callerId : widget.receiverUserId;
-    if (targetId != null && targetId.isNotEmpty && _activeCallId != null) {
-      await _signaling.sendCallEnded(
-        targetUserId: targetId,
-        callId: _activeCallId!,
       );
     }
 
@@ -306,7 +280,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
             Column(
               children: [
                 const SizedBox(height: 36),
-                // Indicador de cifrado de llamada
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
@@ -340,7 +313,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 24),
 
-                // Nombre del contacto
                 Text(
                   widget.contactName,
                   style: const TextStyle(
@@ -351,7 +323,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(height: 8),
 
-                // Estado / Temporizador
                 Text(
                   _isConnected ? _formatDuration(_seconds) : _statusMessage,
                   style: TextStyle(
@@ -367,7 +338,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
                 const Spacer(),
 
-                // Avatar con animación de pulso de audio
                 if (!isVideo)
                   ScaleTransition(
                     scale: _pulseAnimation,
@@ -404,7 +374,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
                 const Spacer(flex: 2),
 
-                // Barra de controles inferiores
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
                   decoration: const BoxDecoration(
@@ -446,23 +415,18 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            // Silenciar
                             _CallActionButton(
                               icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
                               label: _isMuted ? 'Silenciado' : 'Silenciar',
                               isActive: _isMuted,
                               onPressed: () => setState(() => _isMuted = !_isMuted),
                             ),
-
-                            // Altavoz
                             _CallActionButton(
                               icon: _isSpeakerOn ? Icons.volume_up_rounded : Icons.volume_down_rounded,
                               label: _isSpeakerOn ? 'Altavoz' : 'Auricular',
                               isActive: _isSpeakerOn,
                               onPressed: () => setState(() => _isSpeakerOn = !_isSpeakerOn),
                             ),
-
-                            // Video (si aplica)
                             if (widget.callType == CallType.video)
                               _CallActionButton(
                                 icon: _isVideoEnabled ? Icons.videocam_rounded : Icons.videocam_off_rounded,
@@ -470,8 +434,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                                 isActive: _isVideoEnabled,
                                 onPressed: () => setState(() => _isVideoEnabled = !_isVideoEnabled),
                               ),
-
-                            // Botón Colgar
                             FloatingActionButton(
                               heroTag: 'endCallBtn',
                               backgroundColor: AppColors.error,

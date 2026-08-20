@@ -11,6 +11,7 @@ import '../../security/presentation/camouflage_settings_page.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
+import '../../calls/data/call_service.dart';
 import '../../calls/data/call_signaling_service.dart';
 import '../../update/update_service.dart';
 import 'about_page.dart';
@@ -94,58 +95,26 @@ class _ChatHomePageState extends State<ChatHomePage> {
 
   Future<void> _checkIncomingRingingCalls() async {
     try {
-      final uid = Supabase.instance.client.auth.currentUser?.id;
-      if (uid == null) return;
-
-      final rows = await Supabase.instance.client
-          .from('call_records')
-          .select('''
-            id,
-            caller_id,
-            conversation_id,
-            call_type,
-            started_at,
-            caller:profiles!call_records_caller_id_fkey(id, display_name, username, avatar_url)
-          ''')
-          .eq('receiver_id', uid)
-          .eq('status', 'ringing')
-          .order('started_at', ascending: false)
-          .limit(1);
-
-      if ((rows as List).isNotEmpty) {
-        final row = rows.first;
-        final callId = row['id']?.toString() ?? '';
-        final startedAtStr = row['started_at']?.toString();
-        final startedAt = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
-
-        if (startedAt != null && DateTime.now().toUtc().difference(startedAt.toUtc()).inSeconds < 40) {
-          if (_activeShowingCallId != callId && mounted) {
-            _activeShowingCallId = callId;
-            final callerProfile = row['caller'] as Map?;
-            final callerName = (callerProfile?['display_name'] as String?) ??
-                (callerProfile?['username'] as String?) ??
-                'Contacto';
-            final callerAvatar = callerProfile?['avatar_url'] as String?;
-            final callerId = row['caller_id']?.toString() ?? '';
-            final conversationId = row['conversation_id']?.toString();
-            final callType = row['call_type']?.toString() ?? 'audio';
-
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => CallScreen(
-                  contactName: callerName,
-                  avatarUrl: callerAvatar,
-                  callerId: callerId,
-                  callId: callId,
-                  conversationId: conversationId,
-                  callType: callType == 'video' ? CallType.video : CallType.audio,
-                  isIncoming: true,
-                ),
+      final incoming = await CallService().checkForIncomingCall();
+      if (incoming != null && mounted) {
+        final callId = incoming['call_id']?.toString() ?? '';
+        if (_activeShowingCallId != callId) {
+          _activeShowingCallId = callId;
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CallScreen(
+                contactName: incoming['caller_name']?.toString() ?? 'Contacto',
+                avatarUrl: incoming['caller_avatar']?.toString(),
+                callerId: incoming['caller_id']?.toString(),
+                callId: callId,
+                conversationId: incoming['conversation_id']?.toString(),
+                callType: incoming['call_type'] == 'video' ? CallType.video : CallType.audio,
+                isIncoming: true,
               ),
-            ).then((_) {
-              _activeShowingCallId = null;
-            });
-          }
+            ),
+          ).then((_) {
+            _activeShowingCallId = null;
+          });
         }
       }
     } catch (_) {}
