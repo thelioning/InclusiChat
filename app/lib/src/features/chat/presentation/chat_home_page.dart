@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
@@ -45,6 +45,8 @@ class _ChatHomePageState extends State<ChatHomePage> {
   int _totalUnreadCount = 0;
   List<ContactRequestItem> _incomingRequests = [];
   Timer? _homeRefreshTimer;
+  Timer? _callCheckTimer;
+  String? _activeShowingCallId;
 
   static const _titles = ['Conversaciones', 'Contactos', 'Llamadas'];
 
@@ -54,9 +56,12 @@ class _ChatHomePageState extends State<ChatHomePage> {
     _chatService.loadUserProfile();
     _fetchHomeData(initial: true);
     _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
+    _callCheckTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) => _checkIncomingRingingCalls());
+
     CallSignalingService().initialize(
       incomingCallHandler: (event) {
-        if (mounted) {
+        if (mounted && _activeShowingCallId != event.callId) {
+          _activeShowingCallId = event.callId;
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => CallScreen(
@@ -69,7 +74,9 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 isIncoming: true,
               ),
             ),
-          );
+          ).then((_) {
+            _activeShowingCallId = null;
+          });
         }
       },
     );
@@ -81,7 +88,67 @@ class _ChatHomePageState extends State<ChatHomePage> {
   @override
   void dispose() {
     _homeRefreshTimer?.cancel();
+    _callCheckTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _checkIncomingRingingCalls() async {
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid == null) return;
+
+      final rows = await Supabase.instance.client
+          .from('call_records')
+          .select('''
+            id,
+            caller_id,
+            conversation_id,
+            call_type,
+            started_at,
+            caller:profiles!call_records_caller_id_fkey(id, display_name, username, avatar_url)
+          ''')
+          .eq('receiver_id', uid)
+          .eq('status', 'ringing')
+          .order('started_at', ascending: false)
+          .limit(1);
+
+      if ((rows as List).isNotEmpty) {
+        final row = rows.first;
+        final callId = row['id']?.toString() ?? '';
+        final startedAtStr = row['started_at']?.toString();
+        final startedAt = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
+
+        if (startedAt != null && DateTime.now().toUtc().difference(startedAt.toUtc()).inSeconds < 40) {
+          if (_activeShowingCallId != callId && mounted) {
+            _activeShowingCallId = callId;
+            final callerProfile = row['caller'] as Map?;
+            final callerName = (callerProfile?['display_name'] as String?) ??
+                (callerProfile?['username'] as String?) ??
+                'Contacto';
+            final callerAvatar = callerProfile?['avatar_url'] as String?;
+            final callerId = row['caller_id']?.toString() ?? '';
+            final conversationId = row['conversation_id']?.toString();
+            final callType = row['call_type']?.toString() ?? 'audio';
+
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CallScreen(
+                  contactName: callerName,
+                  avatarUrl: callerAvatar,
+                  callerId: callerId,
+                  callId: callId,
+                  conversationId: conversationId,
+                  callType: callType == 'video' ? CallType.video : CallType.audio,
+                  isIncoming: true,
+                ),
+              ),
+            ).then((_) {
+              _activeShowingCallId = null;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchHomeData({bool initial = false}) async {

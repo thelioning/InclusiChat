@@ -464,7 +464,7 @@ create table if not exists public.call_records (
   receiver_id uuid not null references public.profiles(id) on delete cascade,
   conversation_id uuid references public.conversations(id) on delete set null,
   call_type text default 'audio' check (call_type in ('audio', 'video')),
-  status text default 'completed' check (status in ('completed', 'missed', 'rejected', 'busy', 'ongoing')),
+  status text default 'ringing' check (status in ('ringing', 'accepted', 'ongoing', 'completed', 'missed', 'rejected', 'busy')),
   duration_seconds integer default 0,
   started_at timestamptz default now(),
   ended_at timestamptz default now(),
