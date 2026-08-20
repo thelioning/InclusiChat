@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
 import '../../auth/data/auth_service.dart';
+import '../../security/data/camouflage_service.dart';
 import '../../security/presentation/camouflage_settings_page.dart';
 import '../../security/presentation/security_settings_page.dart';
 import '../data/chat_service.dart';
@@ -44,7 +45,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final hasDefaultPin = _profile?.camouflagePin == '1234' || _profile?.camouflagePin == null;
+    final hasDefaultPin = CamouflageService.instance.isDefaultPin;
     final hasMissingAvatar = _profile?.avatarUrl == null || _profile!.avatarUrl!.isEmpty;
 
     return Scaffold(
@@ -102,10 +103,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                   '@${_profile!.username}',
                                   style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
                                 ),
-                                if (_profile!.statusMessage != null && _profile!.statusMessage!.isNotEmpty) ...[
+                                if (_profile!.bio != null && _profile!.bio!.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   Text(
-                                    _profile!.statusMessage!,
+                                    _profile!.bio!,
                                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
