@@ -936,19 +936,15 @@ class ChatService {
   }) async {
     final targetConvIds = <String>{...conversationIds};
     for (final uId in contactUserIds) {
-      try {
-        final convId = await createDirectConversation(uId);
-        targetConvIds.add(convId);
-      } catch (_) {}
+      final convId = await createDirectConversation(uId);
+      targetConvIds.add(convId);
     }
     for (final convId in targetConvIds) {
-      try {
-        await sendImageMessage(
-          conversationId: convId,
-          imageBase64: imageBase64,
-          caption: caption,
-        );
-      } catch (_) {}
+      await sendImageMessage(
+        conversationId: convId,
+        imageBase64: imageBase64,
+        caption: caption,
+      );
     }
   }
 

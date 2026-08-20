@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
@@ -540,7 +542,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 label: 'Galería',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _sendPhotoMessage('🖼️ Imagen compartida');
+                  _pickAndSendImage(ImageSource.gallery);
                 },
               ),
               _AttachmentOption(
@@ -549,7 +551,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 label: 'Cámara',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _sendPhotoMessage('📷 Foto instantánea');
+                  _pickAndSendImage(ImageSource.camera);
                 },
               ),
               _AttachmentOption(
@@ -558,7 +560,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 label: 'Documento',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _sendPhotoMessage('📄 Documento seguro adjunto');
+                  _sendTextMessage('📄 Documento seguro adjunto');
                 },
               ),
               _AttachmentOption(
@@ -567,7 +569,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 label: 'Ubicación',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _sendPhotoMessage('📍 Ubicación segura compartida');
+                  _sendTextMessage('📍 Ubicación segura compartida');
                 },
               ),
             ],
@@ -577,7 +579,44 @@ class _ConversationPageState extends State<ConversationPage> {
     );
   }
 
-  Future<void> _sendPhotoMessage(String text) async {
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: source,
+        imageQuality: 50,
+        maxWidth: 700,
+        maxHeight: 700,
+      );
+      if (file == null) return;
+
+      setState(() => _sending = true);
+      final bytes = await File(file.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+      final caption = _controller.text.trim();
+
+      await _service.sendImageMessage(
+        conversationId: widget.conversationId,
+        imageBase64: base64String,
+        caption: caption.isNotEmpty ? caption : null,
+      );
+      _controller.clear();
+      _onTextChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo enviar la foto.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _sendTextMessage(String text) async {
     setState(() => _sending = true);
     try {
       await _service.sendTextMessage(
