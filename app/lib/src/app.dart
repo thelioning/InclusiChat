@@ -104,6 +104,8 @@ class _SupabaseInitializationAppState
   }
 }
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class InclusiChatApp extends StatelessWidget {
   const InclusiChatApp({
     super.key,
@@ -117,6 +119,7 @@ class InclusiChatApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'InclusiChat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,

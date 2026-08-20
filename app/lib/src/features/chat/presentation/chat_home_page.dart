@@ -8,6 +8,7 @@ import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
 import '../../security/presentation/camouflage_screen.dart';
 import '../../security/presentation/camouflage_settings_page.dart';
+import '../../../app.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
@@ -59,11 +60,12 @@ class _ChatHomePageState extends State<ChatHomePage> {
     _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
     _callCheckTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) => _checkIncomingRingingCalls());
 
-    CallSignalingService().initialize(
+    CallSignalingService().initializeUserChannel(
       incomingCallHandler: (event) {
-        if (mounted && _activeShowingCallId != event.callId) {
+        if (_activeShowingCallId != event.callId) {
           _activeShowingCallId = event.callId;
-          Navigator.of(context).push(
+          final nav = rootNavigatorKey.currentState ?? (mounted ? Navigator.of(context) : null);
+          nav?.push(
             MaterialPageRoute<void>(
               builder: (_) => CallScreen(
                 contactName: event.callerName,
@@ -96,11 +98,12 @@ class _ChatHomePageState extends State<ChatHomePage> {
   Future<void> _checkIncomingRingingCalls() async {
     try {
       final incoming = await CallService().checkForIncomingCall();
-      if (incoming != null && mounted) {
+      if (incoming != null) {
         final callId = incoming['call_id']?.toString() ?? '';
         if (_activeShowingCallId != callId) {
           _activeShowingCallId = callId;
-          Navigator.of(context).push(
+          final nav = rootNavigatorKey.currentState ?? (mounted ? Navigator.of(context) : null);
+          nav?.push(
             MaterialPageRoute<void>(
               builder: (_) => CallScreen(
                 contactName: incoming['caller_name']?.toString() ?? 'Contacto',

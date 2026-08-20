@@ -26,7 +26,9 @@ class CallSignalingService {
   CallSignalingService._internal();
 
   final SupabaseClient _client = Supabase.instance.client;
-  RealtimeChannel? _myChannel;
+  RealtimeChannel? _userCallChannel;
+  RealtimeChannel? _activeRoomChannel;
+  
   Function(IncomingCallEvent)? onIncomingCall;
   Function(String callId)? onCallAccepted;
   Function(String callId)? onCallRejected;
@@ -34,32 +36,29 @@ class CallSignalingService {
 
   String? get currentUserId => _client.auth.currentUser?.id;
 
-  void initialize({
-    Function(IncomingCallEvent)? incomingCallHandler,
-    Function(String callId)? callAcceptedHandler,
-    Function(String callId)? callRejectedHandler,
-    Function(String callId)? callEndedHandler,
+  /// Inicializa la escucha global de llamadas entrantes para el usuario actual
+  void initializeUserChannel({
+    required Function(IncomingCallEvent) incomingCallHandler,
   }) {
-    if (incomingCallHandler != null) onIncomingCall = incomingCallHandler;
-    if (callAcceptedHandler != null) onCallAccepted = callAcceptedHandler;
-    if (callRejectedHandler != null) onCallRejected = callRejectedHandler;
-    if (callEndedHandler != null) onCallEnded = callEndedHandler;
-
+    onIncomingCall = incomingCallHandler;
     final uid = currentUserId;
     if (uid == null) return;
 
-    if (_myChannel != null) {
-      _client.removeChannel(_myChannel!);
+    if (_userCallChannel != null) {
+      _client.removeChannel(_userCallChannel!);
     }
 
-    final channelName = 'call_signal_$uid';
-    _myChannel = _client.channel(channelName);
+    final channelName = 'user_call_$uid';
+    _userCallChannel = _client.channel(
+      channelName,
+      opts: const RealtimeChannelConfig(self: false),
+    );
 
-    _myChannel!
+    _userCallChannel!
         .onBroadcast(
           event: 'incoming_call',
           callback: (payload) {
-            debugPrint('📞 Incoming call signal received: $payload');
+            debugPrint('📞 [Realtime Broadcast] Incoming call signal: $payload');
             final event = IncomingCallEvent(
               callId: payload['call_id']?.toString() ?? '',
               callerId: payload['caller_id']?.toString() ?? '',
@@ -71,34 +70,61 @@ class CallSignalingService {
             onIncomingCall?.call(event);
           },
         )
-        .onBroadcast(
-          event: 'call_accepted',
-          callback: (payload) {
-            debugPrint('✅ Call accepted signal received: $payload');
-            final callId = payload['call_id']?.toString() ?? '';
-            onCallAccepted?.call(callId);
-          },
-        )
-        .onBroadcast(
-          event: 'call_rejected',
-          callback: (payload) {
-            debugPrint('❌ Call rejected signal received: $payload');
-            final callId = payload['call_id']?.toString() ?? '';
-            onCallRejected?.call(callId);
-          },
-        )
-        .onBroadcast(
-          event: 'call_ended',
-          callback: (payload) {
-            debugPrint('🛑 Call ended signal received: $payload');
-            final callId = payload['call_id']?.toString() ?? '';
-            onCallEnded?.call(callId);
-          },
-        )
-        .subscribe();
+        .subscribe((status, error) {
+          debugPrint('📡 User call channel ($channelName) status: $status, error: $error');
+        });
   }
 
-  Future<void> sendIncomingCall({
+  /// Conecta a la sala específica de la llamada activa para intercambiar eventos en tiempo real
+  void joinCallRoom({
+    required String callId,
+    Function(String callId)? callAcceptedHandler,
+    Function(String callId)? callRejectedHandler,
+    Function(String callId)? callEndedHandler,
+  }) {
+    onCallAccepted = callAcceptedHandler;
+    onCallRejected = callRejectedHandler;
+    onCallEnded = callEndedHandler;
+
+    if (_activeRoomChannel != null) {
+      _client.removeChannel(_activeRoomChannel!);
+    }
+
+    final roomName = 'room_call_$callId';
+    _activeRoomChannel = _client.channel(
+      roomName,
+      opts: const RealtimeChannelConfig(self: false),
+    );
+
+    _activeRoomChannel!
+        .onBroadcast(
+          event: 'accept',
+          callback: (payload) {
+            debugPrint('✅ [Call Room] Accept event: $payload');
+            onCallAccepted?.call(payload['call_id']?.toString() ?? callId);
+          },
+        )
+        .onBroadcast(
+          event: 'reject',
+          callback: (payload) {
+            debugPrint('❌ [Call Room] Reject event: $payload');
+            onCallRejected?.call(payload['call_id']?.toString() ?? callId);
+          },
+        )
+        .onBroadcast(
+          event: 'end',
+          callback: (payload) {
+            debugPrint('🛑 [Call Room] End event: $payload');
+            onCallEnded?.call(payload['call_id']?.toString() ?? callId);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('📡 Active Call Room ($roomName) status: $status, error: $error');
+        });
+  }
+
+  /// Envía la señal de llamada entrante al canal personal del destinatario
+  Future<void> sendIncomingCallSignal({
     required String receiverId,
     required String callId,
     required String callerName,
@@ -107,72 +133,78 @@ class CallSignalingService {
     String? conversationId,
   }) async {
     try {
-      final targetChannel = _client.channel('call_signal_$receiverId');
-      await targetChannel.sendBroadcastMessage(
-        event: 'incoming_call',
-        payload: {
-          'call_id': callId,
-          'caller_id': currentUserId,
-          'caller_name': callerName,
-          'caller_avatar': callerAvatar,
-          'call_type': callType,
-          'conversation_id': conversationId,
-        },
+      final targetChannel = _client.channel(
+        'user_call_$receiverId',
+        opts: const RealtimeChannelConfig(self: true),
       );
+
+      targetChannel.subscribe((status, error) async {
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          await targetChannel.sendBroadcastMessage(
+            event: 'incoming_call',
+            payload: {
+              'call_id': callId,
+              'caller_id': currentUserId,
+              'caller_name': callerName,
+              'caller_avatar': callerAvatar,
+              'call_type': callType,
+              'conversation_id': conversationId,
+            },
+          );
+          debugPrint('🚀 [Broadcast sent] incoming_call to user_call_$receiverId');
+        }
+      });
     } catch (e) {
-      debugPrint('Error sending incoming_call signal: $e');
+      debugPrint('Error sending incoming call signal: $e');
     }
   }
 
-  Future<void> sendCallAccepted({
-    required String callerId,
-    required String callId,
-  }) async {
+  /// Envía señal de aceptación dentro de la sala de llamada
+  Future<void> sendAcceptSignal(String callId) async {
     try {
-      final targetChannel = _client.channel('call_signal_$callerId');
-      await targetChannel.sendBroadcastMessage(
-        event: 'call_accepted',
-        payload: {'call_id': callId},
-      );
+      if (_activeRoomChannel != null) {
+        await _activeRoomChannel!.sendBroadcastMessage(
+          event: 'accept',
+          payload: {'call_id': callId},
+        );
+      }
     } catch (e) {
-      debugPrint('Error sending call_accepted signal: $e');
+      debugPrint('Error sending accept signal: $e');
     }
   }
 
-  Future<void> sendCallRejected({
-    required String callerId,
-    required String callId,
-  }) async {
+  /// Envía señal de rechazo dentro de la sala de llamada
+  Future<void> sendRejectSignal(String callId) async {
     try {
-      final targetChannel = _client.channel('call_signal_$callerId');
-      await targetChannel.sendBroadcastMessage(
-        event: 'call_rejected',
-        payload: {'call_id': callId},
-      );
+      if (_activeRoomChannel != null) {
+        await _activeRoomChannel!.sendBroadcastMessage(
+          event: 'reject',
+          payload: {'call_id': callId},
+        );
+      }
     } catch (e) {
-      debugPrint('Error sending call_rejected signal: $e');
+      debugPrint('Error sending reject signal: $e');
     }
   }
 
-  Future<void> sendCallEnded({
-    required String targetUserId,
-    required String callId,
-  }) async {
+  /// Envía señal de colgar dentro de la sala de llamada
+  Future<void> sendEndSignal(String callId) async {
     try {
-      final targetChannel = _client.channel('call_signal_$targetUserId');
-      await targetChannel.sendBroadcastMessage(
-        event: 'call_ended',
-        payload: {'call_id': callId},
-      );
+      if (_activeRoomChannel != null) {
+        await _activeRoomChannel!.sendBroadcastMessage(
+          event: 'end',
+          payload: {'call_id': callId},
+        );
+      }
     } catch (e) {
-      debugPrint('Error sending call_ended signal: $e');
+      debugPrint('Error sending end signal: $e');
     }
   }
 
-  void dispose() {
-    if (_myChannel != null) {
-      _client.removeChannel(_myChannel!);
-      _myChannel = null;
+  void leaveCallRoom() {
+    if (_activeRoomChannel != null) {
+      _client.removeChannel(_activeRoomChannel!);
+      _activeRoomChannel = null;
     }
   }
 }

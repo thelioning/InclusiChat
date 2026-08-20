@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
 import '../../calls/data/call_service.dart';
+import '../../calls/data/call_signaling_service.dart';
 import '../data/chat_service.dart';
 
 enum CallType { audio, video }
@@ -47,8 +48,9 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   bool _isVideoEnabled = true;
   final _callService = CallService();
   final _chatService = ChatService();
+  final _signaling = CallSignalingService();
   bool _hasEnded = false;
-  String? _activeCallId;
+  late String _activeCallId;
   String? _activeConversationId;
   String _statusMessage = '';
 
@@ -56,7 +58,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _isIncomingRinging = widget.isIncoming;
-    _activeCallId = widget.callId;
+    _activeCallId = widget.callId ?? 'call_${DateTime.now().millisecondsSinceEpoch}';
     _activeConversationId = widget.conversationId;
 
     _pulseController = AnimationController(
@@ -68,12 +70,32 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    // Conectar a la sala de señalización de la llamada
+    _signaling.joinCallRoom(
+      callId: _activeCallId,
+      callAcceptedHandler: (id) {
+        if (!_isConnected && mounted && !_hasEnded) {
+          _onRemoteAccepted();
+        }
+      },
+      callRejectedHandler: (id) {
+        if (mounted && !_hasEnded) {
+          _handleCallTerminated('Llamada rechazada', wasConnected: false);
+        }
+      },
+      callEndedHandler: (id) {
+        if (mounted && !_hasEnded) {
+          _handleCallTerminated('Llamada finalizada', wasConnected: _isConnected);
+        }
+      },
+    );
+
     if (!_isIncomingRinging) {
       _statusMessage = 'Repicando de forma segura...';
       _initiateOutgoingCall();
     } else {
       _statusMessage = 'Llamada de voz entrante...';
-      _listenToRemoteCallState();
+      _startStatusPolling();
     }
   }
 
@@ -82,23 +104,40 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       final targetId = widget.receiverUserId;
       if (targetId == null || targetId.isEmpty) return;
 
-      // Asegurar ID de conversación directa
+      // Obtener o crear conversación directa
       String convId = _activeConversationId ?? '';
       if (convId.isEmpty) {
         convId = await _chatService.createDirectConversation(targetId);
         _activeConversationId = convId;
       }
 
-      final callId = await _callService.startCall(
+      // Obtener mi nombre de perfil
+      String myName = 'Contacto';
+      String? myAvatar;
+      try {
+        final profile = await _chatService.loadUserProfile();
+        myName = profile.displayName;
+        myAvatar = profile.avatarUrl;
+      } catch (_) {}
+
+      // 1. Enviar señal Realtime directa al usuario destinatario
+      await _signaling.sendIncomingCallSignal(
+        receiverId: targetId,
+        callId: _activeCallId,
+        callerName: myName,
+        callerAvatar: myAvatar,
+        callType: widget.callType == CallType.video ? 'video' : 'audio',
+        conversationId: convId,
+      );
+
+      // 2. Enviar mensaje de señal en la conversación como respaldo dual
+      await _callService.startCall(
         conversationId: convId,
         receiverId: targetId,
         callType: widget.callType == CallType.video ? 'video' : 'audio',
       );
 
-      if (!mounted) return;
-      _activeCallId = callId;
-
-      _listenToRemoteCallState();
+      _startStatusPolling();
 
       // Timeout si no contesta en 35 segundos
       _timeoutTimer = Timer(const Duration(seconds: 35), () {
@@ -111,38 +150,41 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     }
   }
 
-  void _listenToRemoteCallState() {
+  void _startStatusPolling() {
     _statusPollTimer?.cancel();
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 800), (_) async {
-      if (_hasEnded || _activeCallId == null || _activeConversationId == null) return;
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 750), (_) async {
+      if (_hasEnded || _activeConversationId == null) return;
 
       final action = await _callService.getCallSignalState(
         conversationId: _activeConversationId!,
-        callId: _activeCallId!,
+        callId: _activeCallId,
       );
 
       if (!mounted || _hasEnded) return;
 
       if (action == 'accept' && !_isConnected) {
-        // Receptor contestó
-        _timeoutTimer?.cancel();
-        setState(() {
-          _isConnected = true;
-          _isIncomingRinging = false;
-          _statusMessage = 'Conectado';
-        });
-        _startTimer();
+        _onRemoteAccepted();
       } else if (action == 'reject') {
-        // Receptor rechazó
         _handleCallTerminated('Llamada rechazada', wasConnected: false);
-      } else if (action == 'end' && !_isIncomingRinging) {
-        // Otra parte colgó
-        _handleCallTerminated('Llamada finalizada', wasConnected: _isConnected);
-      } else if (action == 'end' && _isIncomingRinging) {
-        // Emisor canceló antes de que contestaran
-        _handleCallTerminated('Llamada cancelada', wasConnected: false);
+      } else if (action == 'end') {
+        _handleCallTerminated(
+          _isIncomingRinging ? 'Llamada cancelada' : 'Llamada finalizada',
+          wasConnected: _isConnected,
+        );
       }
     });
+  }
+
+  void _onRemoteAccepted() {
+    _timeoutTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _isConnected = true;
+        _isIncomingRinging = false;
+        _statusMessage = 'Conectado';
+      });
+      _startTimer();
+    }
   }
 
   void _handleCallTerminated(String message, {required bool wasConnected}) {
@@ -151,6 +193,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _timer?.cancel();
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _signaling.leaveCallRoom();
 
     if (mounted) {
       setState(() {
@@ -160,7 +203,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       });
     }
 
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    Future.delayed(const Duration(milliseconds: 1300), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
@@ -180,6 +223,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
     _pulseController.dispose();
+    _signaling.leaveCallRoom();
     super.dispose();
   }
 
@@ -191,10 +235,15 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
   Future<void> _answerCall() async {
     _timeoutTimer?.cancel();
-    if (_activeConversationId != null && _activeCallId != null) {
+
+    // 1. Enviar señal Realtime a la sala
+    await _signaling.sendAcceptSignal(_activeCallId);
+
+    // 2. Enviar señal de aceptación en la conversación
+    if (_activeConversationId != null) {
       await _callService.acceptCall(
         conversationId: _activeConversationId!,
-        callId: _activeCallId!,
+        callId: _activeCallId,
       );
     }
 
@@ -215,12 +264,18 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
 
-    if (_activeConversationId != null && _activeCallId != null) {
+    // 1. Enviar señal Realtime de rechazo a la sala
+    await _signaling.sendRejectSignal(_activeCallId);
+
+    // 2. Enviar mensaje de rechazo en conversación
+    if (_activeConversationId != null) {
       await _callService.rejectCall(
         conversationId: _activeConversationId!,
-        callId: _activeCallId!,
+        callId: _activeCallId,
       );
     }
+
+    _signaling.leaveCallRoom();
 
     if (mounted) {
       Navigator.of(context).pop();
@@ -234,14 +289,20 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     _statusPollTimer?.cancel();
     _timeoutTimer?.cancel();
 
-    if (_activeConversationId != null && _activeCallId != null) {
+    // 1. Enviar señal Realtime de finalización a la sala
+    await _signaling.sendEndSignal(_activeCallId);
+
+    // 2. Enviar mensaje de finalización en conversación
+    if (_activeConversationId != null) {
       await _callService.endCall(
         conversationId: _activeConversationId!,
-        callId: _activeCallId!,
+        callId: _activeCallId,
         durationSeconds: _seconds,
         wasConnected: _isConnected,
       );
     }
+
+    _signaling.leaveCallRoom();
 
     if (mounted) {
       Navigator.of(context).pop();
