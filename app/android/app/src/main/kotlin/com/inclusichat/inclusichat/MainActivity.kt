@@ -12,6 +12,7 @@ import android.media.RingtoneManager
 import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -24,23 +25,70 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     companion object {
         var instance: MainActivity? = null
+        const val CHANNEL = "com.inclusichat/ringtone"
     }
 
-    private val CHANNEL = "com.inclusichat/ringtone"
-    private val NOTIFICATION_CHANNEL_ID = "inclusichat_calls_channel"
-    private val NOTIFICATION_ID = 9991
-
+    private var methodChannel: MethodChannel? = null
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
     private var toneGenerator: ToneGenerator? = null
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        instance = this
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val callId = intent?.getStringExtra("call_id")
+        if (callId != null) {
+            stopIncomingRinging()
+
+            val serviceIntent = Intent(applicationContext, InclusiChatCallService::class.java).apply {
+                action = InclusiChatCallService.ACTION_CALL_HANDLED
+                putExtra("call_id", callId)
+            }
+            startService(serviceIntent)
+
+            val conversationId = intent.getStringExtra("conversation_id")
+            val callerName = intent.getStringExtra("caller_name") ?: "Contacto"
+            val callerId = intent.getStringExtra("caller_id")
+
+            methodChannel?.invokeMethod("onIncomingCallFromNotification", mapOf(
+                "call_id" to callId,
+                "conversation_id" to conversationId,
+                "caller_name" to callerName,
+                "caller_id" to callerId
+            ))
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         instance = this
-        createNotificationChannel()
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
+                "startBackgroundCallService" -> {
+                    val userId = call.argument<String>("userId")
+                    val authToken = call.argument<String>("authToken")
+                    val supabaseUrl = call.argument<String>("supabaseUrl")
+                    val apiKey = call.argument<String>("apiKey")
+
+                    startBackgroundCallService(userId, authToken, supabaseUrl, apiKey)
+                    result.success(true)
+                }
+                "stopBackgroundCallService" -> {
+                    stopBackgroundCallService()
+                    result.success(true)
+                }
                 "startIncomingRinging" -> {
                     val callerName = call.argument<String>("callerName") ?: "Contacto"
                     startIncomingRinging(callerName)
@@ -67,19 +115,33 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Llamadas de InclusiChat"
-            val descriptionText = "Notificaciones prioritarias de llamadas entrantes"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
-                description = descriptionText
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 1000, 1000)
+    private fun startBackgroundCallService(userId: String?, authToken: String?, supabaseUrl: String?, apiKey: String?) {
+        try {
+            val intent = Intent(applicationContext, InclusiChatCallService::class.java).apply {
+                action = InclusiChatCallService.ACTION_START_SERVICE
+                putExtra("userId", userId)
+                putExtra("authToken", authToken)
+                putExtra("supabaseUrl", supabaseUrl)
+                putExtra("apiKey", apiKey)
             }
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun stopBackgroundCallService() {
+        try {
+            val intent = Intent(applicationContext, InclusiChatCallService::class.java).apply {
+                action = InclusiChatCallService.ACTION_STOP_SERVICE
+            }
+            startService(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -102,59 +164,7 @@ class MainActivity : FlutterActivity() {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val ringerMode = audioManager.ringerMode
 
-            // 1. PendingIntent para Responder
-            val answerIntent = Intent(applicationContext, MainActivity::class.java).apply {
-                action = "ACTION_ANSWER_CALL"
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            }
-            val answerPendingIntent = PendingIntent.getActivity(
-                applicationContext,
-                101,
-                answerIntent,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
-            )
-
-            // 2. PendingIntent para Rechazar
-            val rejectIntent = Intent(applicationContext, CallActionReceiver::class.java).apply {
-                action = "ACTION_REJECT_CALL"
-            }
-            val rejectPendingIntent = PendingIntent.getBroadcast(
-                applicationContext,
-                102,
-                rejectIntent,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
-            )
-
-            // 3. Crear Persona para CallStyle
-            val callerPerson = Person.Builder()
-                .setName(callerName)
-                .setImportant(true)
-                .build()
-
-            // 4. Construir Notificación estilo Llamada Entrante (Heads-Up Banner idéntico a WhatsApp)
-            val notificationBuilder = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(callerName)
-                .setContentText("Llamada entrante")
-                .setStyle(
-                    NotificationCompat.CallStyle.forIncomingCall(
-                        callerPerson,
-                        rejectPendingIntent,
-                        answerPendingIntent
-                    )
-                )
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setFullScreenIntent(answerPendingIntent, true)
-                .setContentIntent(answerPendingIntent)
-                .setAutoCancel(true)
-                .setOngoing(true)
-
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build())
-
-            // 5. Vibrador real de hardware de Android en bucle
+            // 1. Vibrador real de hardware de Android en bucle
             if (ringerMode != AudioManager.RINGER_MODE_SILENT) {
                 vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -174,7 +184,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            // 6. Timbre oficial de llamadas de Android con volumen del sistema
+            // 2. Timbre oficial de llamadas de Android con volumen del sistema
             if (ringerMode == AudioManager.RINGER_MODE_NORMAL) {
                 val notificationUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
                     ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -198,12 +208,16 @@ class MainActivity : FlutterActivity() {
 
     fun stopIncomingRinging() {
         try {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.cancel(NOTIFICATION_ID)
             ringtone?.stop()
             ringtone = null
             vibrator?.cancel()
             vibrator = null
+
+            // También notificar al servicio de segundo plano
+            val serviceIntent = Intent(applicationContext, InclusiChatCallService::class.java).apply {
+                action = InclusiChatCallService.ACTION_CALL_HANDLED
+            }
+            startService(serviceIntent)
         } catch (e: Exception) {
             e.printStackTrace()
         }
