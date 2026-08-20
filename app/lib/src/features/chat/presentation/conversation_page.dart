@@ -393,7 +393,7 @@ class _ConversationPageState extends State<ConversationPage> {
                         ),
                         IconButton(
                           tooltip: 'Tomar foto',
-                          onPressed: () => _sendPhotoMessage('📷 Foto cifrada'),
+                          onPressed: () => _pickAndSendImage(ImageSource.camera),
                           icon: const Icon(Icons.camera_alt_outlined),
                         ),
                       ],
@@ -670,7 +670,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 FilledButton.icon(
                   onPressed: () {
                     Navigator.of(ctx).pop();
-                    _sendPhotoMessage('🎤 [Nota de voz segura 0:08]');
+                    _sendTextMessage('🎤 [Nota de voz segura 0:08]');
                   },
                   icon: const Icon(Icons.send_rounded),
                   label: const Text('Enviar audio'),
