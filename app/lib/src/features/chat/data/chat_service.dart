@@ -266,13 +266,20 @@ class ChatService {
         if (!latestMessage.containsKey(cId)) {
           final rawContent = row['content'] as String?;
           String? displayContent = rawContent;
-          if (rawContent != null && rawContent.startsWith('{') && (rawContent.contains('image_url') || rawContent.contains('image_base64'))) {
+          if (rawContent != null && rawContent.startsWith('{')) {
             try {
               final decoded = jsonDecode(rawContent) as Map;
-              final cap = (decoded['caption'] as String?)?.trim() ?? '';
-              displayContent = cap.isNotEmpty ? '📷 $cap' : '📷 Foto';
+              if (decoded.containsKey('audio_url')) {
+                final dur = decoded['duration'] as int? ?? 0;
+                final minutes = dur ~/ 60;
+                final seconds = (dur % 60).toString().padLeft(2, '0');
+                displayContent = '🎤 Nota de voz ($minutes:$seconds)';
+              } else if (decoded.containsKey('image_url') || decoded.containsKey('image_base64')) {
+                final cap = (decoded['caption'] as String?)?.trim() ?? '';
+                displayContent = cap.isNotEmpty ? '📷 $cap' : '📷 Foto';
+              }
             } catch (_) {
-              displayContent = '📷 Foto';
+              displayContent = rawContent;
             }
           } else if (rawContent != null && rawContent.contains('[IMAGE_URL]')) {
             final parts = rawContent.split('|||');
@@ -998,6 +1005,52 @@ class ChatService {
         caption: caption,
       );
     }
+  }
+
+  Future<String> uploadAudioFile(String filePath) async {
+    try {
+      final uri = Uri.parse('https://catbox.moe/user/api.php');
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['reqtype'] = 'fileupload'
+        ..files.add(await http.MultipartFile.fromPath('fileToUpload', filePath));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200) {
+        final body = response.body.trim();
+        if (body.startsWith('http')) {
+          return body;
+        }
+      }
+      throw Exception('No se pudo subir la nota de voz');
+    } catch (e) {
+      debugPrint('Audio upload error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> sendAudioMessage({
+    required String conversationId,
+    required String audioUrl,
+    required int durationSeconds,
+  }) async {
+    final payload = jsonEncode({
+      'audio_url': audioUrl,
+      'duration': durationSeconds,
+    });
+
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': _userId,
+      'type': 'audio',
+      'content': payload,
+    });
+
+    try {
+      await _client.from('conversations').update({
+        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', conversationId);
+    } catch (_) {}
   }
 
   bool isOwnMessage(Map<String, dynamic> message) =>

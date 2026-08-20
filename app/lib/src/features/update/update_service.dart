@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 
 class UpdateService {
-  static const String currentVersion = '1.3.0';
+  static const String currentVersion = '1.3.1';
   static bool _hasCheckedThisSession = false;
 
   /// Consulta en segundo plano la última versión disponible en GitHub Releases.

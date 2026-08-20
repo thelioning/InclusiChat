@@ -33,9 +33,10 @@ alter table public.profiles add column if not exists updated_at timestamptz defa
 alter table public.profiles enable row level security;
 
 drop policy if exists "Perfiles visibles para usuarios autenticados" on public.profiles;
-create policy "Perfiles visibles para usuarios autenticados"
+drop policy if exists "profiles_select_policy" on public.profiles;
+create policy "profiles_select_policy"
   on public.profiles for select
-  to authenticated
+  to anon, authenticated
   using (true);
 
 drop policy if exists "Los usuarios pueden actualizar su propio perfil" on public.profiles;
@@ -48,16 +49,22 @@ create policy "Los usuarios pueden gestionar su propio perfil"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
--- Crear perfiles para usuarios existentes en auth.users si no los tienen
-insert into public.profiles (id, display_name, username)
-select 
-  u.id, 
-  coalesce(u.raw_user_meta_data->>'display_name', split_part(u.email, '@', 1), 'Usuario'),
-  coalesce(u.raw_user_meta_data->>'username', 'user_' || substr(u.id::text, 1, 8))
-from auth.users u
-on conflict (id) do nothing;
+-- Función segura para comprobar disponibilidad de alias antes de registrar (accesible para anon y authenticated)
+create or replace function public.check_username_available(target_username text)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select not exists (
+    select 1 from public.profiles
+    where lower(username) = lower(regexp_replace(target_username, '[^a-zA-Z0-9_]', '', 'g'))
+  );
+$$;
 
--- Trigger para crear perfil automáticamente al registrarse en Auth
+grant execute on function public.check_username_available(text) to anon, authenticated;
+
+-- Trigger para crear perfil automáticamente al registrarse en Auth con validación estricta
 create or replace function public.handle_new_user()
 returns trigger as $$
 declare
@@ -74,9 +81,9 @@ begin
     final_username := 'user_' || substr(new.id::text, 1, 8);
   end if;
 
-  -- Si el username ya existe, añadir un sufijo aleatorio
+  -- Si el username ya existe, rechazar para evitar duplicados silenciosos
   if exists (select 1 from public.profiles where username = final_username) then
-    final_username := final_username || '_' || substr(new.id::text, 1, 4);
+    raise exception 'El alias de usuario ya está en uso.';
   end if;
 
   insert into public.profiles (id, display_name, username, avatar_url)
@@ -93,7 +100,7 @@ begin
 
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Asociar trigger a auth.users
 drop trigger if exists on_auth_user_created on auth.users;

@@ -1,7 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
@@ -626,57 +632,38 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  Future<void> _sendAudioVoiceNote(String filePath, int durationSeconds) async {
+    setState(() => _sending = true);
+    try {
+      final audioUrl = await _service.uploadAudioFile(filePath);
+      await _service.sendAudioMessage(
+        conversationId: widget.conversationId,
+        audioUrl: audioUrl,
+        durationSeconds: durationSeconds,
+      );
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al enviar nota de voz: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   void _showVoiceNoteRecorder() {
     showModalBottomSheet<void>(
       context: context,
+      isDismissible: false,
+      enableDrag: false,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.mic_rounded, color: AppColors.primary, size: 36),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Grabando nota de voz segura...',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Audio cifrado de extremo a extremo',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                  label: const Text('Descartar', style: TextStyle(color: AppColors.error)),
-                ),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _sendTextMessage('🎤 [Nota de voz segura 0:08]');
-                  },
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Enviar audio'),
-                ),
-              ],
-            ),
-          ],
-        ),
+      builder: (ctx) => _VoiceRecorderModal(
+        onSend: _sendAudioVoiceNote,
       ),
     );
   }
@@ -808,6 +795,351 @@ class _ConversationPageState extends State<ConversationPage> {
   }
 }
 
+class _VoiceRecorderModal extends StatefulWidget {
+  const _VoiceRecorderModal({
+    required this.onSend,
+  });
+
+  final Future<void> Function(String filePath, int durationSeconds) onSend;
+
+  @override
+  State<_VoiceRecorderModal> createState() => _VoiceRecorderModalState();
+}
+
+class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTickerProviderStateMixin {
+  final _recorder = AudioRecorder();
+  Timer? _timer;
+  int _seconds = 0;
+  bool _isUploading = false;
+  String? _recordedPath;
+  late AnimationController _animCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _startRecording();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _animCtrl.dispose();
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Se requiere permiso de micrófono para notas de voz.')),
+          );
+          Navigator.of(context).pop();
+        }
+        return;
+      }
+
+      if (await _recorder.hasPermission()) {
+        final tempDir = await getTemporaryDirectory();
+        final path = '${tempDir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        await _recorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
+          path: path,
+        );
+        if (mounted) {
+          setState(() {
+            _recordedPath = path;
+          });
+          _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+            if (mounted) {
+              setState(() => _seconds++);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Recording start error: $e');
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _stopAndDiscard() async {
+    _timer?.cancel();
+    try {
+      await _recorder.stop();
+      if (_recordedPath != null) {
+        final file = File(_recordedPath!);
+        if (await file.exists()) await file.delete();
+      }
+    } catch (_) {}
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _stopAndSend() async {
+    _timer?.cancel();
+    final duration = _seconds > 0 ? _seconds : 1;
+    setState(() => _isUploading = true);
+    try {
+      final path = await _recorder.stop();
+      final finalPath = path ?? _recordedPath;
+      if (finalPath != null && File(finalPath).existsSync()) {
+        await widget.onSend(finalPath, duration);
+      }
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      debugPrint('Error sending voice note: $e');
+      if (mounted) {
+        setState(() => _isUploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo enviar la nota de voz: $e')),
+        );
+      }
+    }
+  }
+
+  String get _formattedTime {
+    final m = _seconds ~/ 60;
+    final s = (_seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isUploading) ...[
+            const CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(height: 16),
+            const Text(
+              'Enviando nota de voz...',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ] else ...[
+            AnimatedBuilder(
+              animation: _animCtrl,
+              builder: (ctx, child) => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15 + (_animCtrl.value * 0.15)),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: _animCtrl.value * 0.3),
+                      blurRadius: 16,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.mic_rounded, color: AppColors.primary, size: 36),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _formattedTime,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Grabando nota de voz segura...',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _stopAndDiscard,
+                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                  label: const Text('Descartar', style: TextStyle(color: AppColors.error)),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  onPressed: _stopAndSend,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('Enviar nota'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AudioPlayerBubble extends StatefulWidget {
+  const _AudioPlayerBubble({
+    required this.audioUrl,
+    required this.durationSeconds,
+    required this.own,
+  });
+
+  final String audioUrl;
+  final int durationSeconds;
+  final bool own;
+
+  @override
+  State<_AudioPlayerBubble> createState() => _AudioPlayerBubbleState();
+}
+
+class _AudioPlayerBubbleState extends State<_AudioPlayerBubble> {
+  late final AudioPlayer _player;
+  bool _isPlaying = false;
+  Duration _position = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _totalDuration = Duration(seconds: widget.durationSeconds);
+
+    _player.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+
+    _player.onPositionChanged.listen((pos) {
+      if (mounted) {
+        setState(() {
+          _position = pos;
+        });
+      }
+    });
+
+    _player.onDurationChanged.listen((dur) {
+      if (mounted && dur > Duration.zero) {
+        setState(() {
+          _totalDuration = dur;
+        });
+      }
+    });
+
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _position = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    try {
+      if (_isPlaying) {
+        await _player.pause();
+      } else {
+        await _player.play(UrlSource(widget.audioUrl));
+      }
+    } catch (e) {
+      debugPrint('Error playing audio: $e');
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes;
+    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentMs = _position.inMilliseconds.toDouble();
+    final totalMs = _totalDuration.inMilliseconds.toDouble();
+    final maxMs = totalMs > 0 ? totalMs : 1.0;
+    final valueMs = currentMs.clamp(0.0, maxMs);
+
+    return Container(
+      width: 230,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: widget.own ? Colors.white24 : AppColors.primary.withValues(alpha: 0.2),
+            child: IconButton(
+              iconSize: 22,
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: widget.own ? Colors.white : AppColors.primary,
+              ),
+              onPressed: _togglePlay,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                    activeTrackColor: widget.own ? Colors.white : AppColors.primary,
+                    inactiveTrackColor: widget.own ? Colors.white24 : Colors.white12,
+                    thumbColor: widget.own ? Colors.white : AppColors.primary,
+                  ),
+                  child: Slider(
+                    value: valueMs,
+                    min: 0.0,
+                    max: maxMs,
+                    onChanged: (val) async {
+                      final newPos = Duration(milliseconds: val.toInt());
+                      await _player.seek(newPos);
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _isPlaying ? _formatDuration(_position) : _formatDuration(_totalDuration),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: widget.own ? Colors.white70 : AppColors.textSecondary,
+                        ),
+                      ),
+                      Icon(
+                        Icons.mic_rounded,
+                        size: 14,
+                        color: widget.own ? Colors.white70 : AppColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.messageId,
@@ -880,14 +1212,21 @@ class _MessageBubble extends StatelessWidget {
     String? imageUrl;
     String? imageBase64;
     String? caption;
+    String? audioUrl;
+    int? audioDuration;
     String displayContent = content;
 
-    if (content.startsWith('{') && (content.contains('image_url') || content.contains('image_base64'))) {
+    if (content.startsWith('{')) {
       try {
         final decoded = jsonDecode(content) as Map;
-        imageUrl = decoded['image_url'] as String?;
-        imageBase64 = decoded['image_base64'] as String?;
-        caption = decoded['caption'] as String?;
+        if (decoded.containsKey('audio_url')) {
+          audioUrl = decoded['audio_url'] as String?;
+          audioDuration = decoded['duration'] as int?;
+        } else if (decoded.containsKey('image_url') || decoded.containsKey('image_base64')) {
+          imageUrl = decoded['image_url'] as String?;
+          imageBase64 = decoded['image_base64'] as String?;
+          caption = (decoded['caption'] as String?)?.trim();
+        }
       } catch (_) {}
     } else if (content.contains('[IMAGE_URL]')) {
       final clean = content.replaceAll('📷 [IMAGE_URL]', '').replaceAll('[IMAGE_URL]', '');
@@ -895,18 +1234,20 @@ class _MessageBubble extends StatelessWidget {
       imageUrl = parts[0].trim();
       if (parts.length > 1) caption = parts[1].trim();
     } else if (metadata != null) {
+      audioUrl = metadata!['audio_url'] as String?;
+      audioDuration = metadata!['duration'] as int?;
       imageUrl = metadata!['image_url'] as String?;
       imageBase64 = metadata!['image_base64'] as String?;
-      caption = metadata!['caption'] as String?;
+      caption = (metadata!['caption'] as String?)?.trim();
     }
 
     final hasImage = (imageUrl != null && imageUrl.isNotEmpty) ||
                      (imageBase64 != null && imageBase64.isNotEmpty);
+    final hasAudio = (audioUrl != null && audioUrl.isNotEmpty);
+
     final cleanCaption = (caption != null && caption.isNotEmpty)
         ? caption
-        : (hasImage
-            ? displayContent.replaceAll('📷 Foto', '').replaceAll('📷 ', '').trim()
-            : displayContent);
+        : (hasImage || hasAudio ? '' : displayContent);
 
     return Align(
       alignment: own ? Alignment.centerRight : Alignment.centerLeft,
@@ -970,7 +1311,14 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 if (cleanCaption.isNotEmpty) const SizedBox(height: 6),
               ],
-              if (cleanCaption.isNotEmpty || !hasImage)
+              if (hasAudio && audioUrl != null) ...[
+                _AudioPlayerBubble(
+                  audioUrl: audioUrl,
+                  durationSeconds: audioDuration ?? 0,
+                  own: own,
+                ),
+              ],
+              if (cleanCaption.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Align(
