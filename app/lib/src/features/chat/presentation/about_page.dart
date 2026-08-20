@@ -76,7 +76,7 @@ class AboutPage extends StatelessWidget {
                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                   ),
                   child: const Text(
-                    'Versión 1.2.9 (Build 30) • Release Estable',
+                    'Versión 1.3.0 (Build 31) • Release Estable',
                     style: TextStyle(
                       color: AppColors.primary,
                       fontSize: 12,
@@ -205,7 +205,7 @@ class AboutPage extends StatelessWidget {
                           showLicensePage(
                             context: context,
                             applicationName: 'InclusiChat',
-                            applicationVersion: '1.2.9',
+                            applicationVersion: '1.3.0',
                             applicationLegalese: '© 2026 InclusiChat & Baremetal Academy (Ermógenes Rodríguez Fernández)',
                           );
                         },

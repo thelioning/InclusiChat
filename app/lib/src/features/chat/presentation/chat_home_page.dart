@@ -14,11 +14,13 @@ import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
 import '../data/invite_service.dart';
 import 'about_page.dart';
+import 'calls_page.dart';
 import 'contacts_page.dart';
 import 'conversation_page.dart';
 import 'new_conversation_page.dart';
 import 'profile_settings_page.dart';
 import 'quick_photo_preview_page.dart';
+import 'settings_page.dart';
 import 'user_guide_page.dart';
 
 enum _ConversationFilter { all, unread, starred, circles, collectives }
@@ -43,7 +45,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
   List<ContactRequestItem> _incomingRequests = [];
   Timer? _homeRefreshTimer;
 
-  static const _titles = ['Conversaciones', 'Contactos', 'Ajustes'];
+  static const _titles = ['Conversaciones', 'Contactos', 'Llamadas'];
 
   @override
   void initState() {
@@ -224,6 +226,11 @@ class _ChatHomePageState extends State<ChatHomePage> {
               PopupMenuButton<String>(
                 tooltip: 'Opciones',
                 onSelected: (value) {
+                  if (value == 'settings') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+                    );
+                  }
                   if (value == 'profile') {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
@@ -234,9 +241,38 @@ class _ChatHomePageState extends State<ChatHomePage> {
                       MaterialPageRoute<void>(builder: (_) => const CamouflageSettingsPage()),
                     );
                   }
+                  if (value == 'guide') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const UserGuidePage()),
+                    );
+                  }
+                  if (value == 'about') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const AboutPage()),
+                    );
+                  }
                   if (value == 'logout') _signOut();
                 },
                 itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.settings_outlined, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        const Expanded(child: Text('Ajustes', style: TextStyle(fontWeight: FontWeight.w600))),
+                        if (totalBadges > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: AppColors.error,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text('$totalBadges', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem(
                     value: 'profile',
                     child: Row(
@@ -262,7 +298,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
                       children: [
                         const Icon(Icons.visibility_off_outlined),
                         const SizedBox(width: 12),
-                        const Expanded(child: Text('Camuflaje')),
+                        const Expanded(child: Text('Privacidad y camuflaje')),
                         if (hasDefaultPin)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -272,6 +308,26 @@ class _ChatHomePageState extends State<ChatHomePage> {
                             ),
                             child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'guide',
+                    child: Row(
+                      children: [
+                        Icon(Icons.menu_book_rounded),
+                        SizedBox(width: 12),
+                        Text('Guía de uso'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'about',
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded),
+                        SizedBox(width: 12),
+                        Text('Acerca de InclusiChat'),
                       ],
                     ),
                   ),
@@ -311,10 +367,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 onFilterChanged: (value) => setState(() => _filter = value),
               ),
               const ContactsPage(),
-              _SettingsSection(
-                hasDefaultPin: hasDefaultPin,
-                hasMissingAvatar: hasMissingAvatar,
-              ),
+              const CallsPage(),
             ],
           ),
           floatingActionButton: _selectedIndex == 0
@@ -366,22 +419,10 @@ class _ChatHomePageState extends State<ChatHomePage> {
                     : const Icon(Icons.people_rounded),
                 label: 'Contactos',
               ),
-              NavigationDestination(
-                icon: totalBadges > 0
-                    ? Badge.count(
-                        count: totalBadges,
-                        backgroundColor: AppColors.error,
-                        child: const Icon(Icons.settings_outlined),
-                      )
-                    : const Icon(Icons.settings_outlined),
-                selectedIcon: totalBadges > 0
-                    ? Badge.count(
-                        count: totalBadges,
-                        backgroundColor: AppColors.error,
-                        child: const Icon(Icons.settings_rounded),
-                      )
-                    : const Icon(Icons.settings_rounded),
-                label: 'Ajustes',
+              const NavigationDestination(
+                icon: Icon(Icons.call_outlined),
+                selectedIcon: Icon(Icons.call_rounded),
+                label: 'Llamadas',
               ),
             ],
           ),
@@ -803,209 +844,6 @@ class _EmptySection extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({
-    this.hasDefaultPin = false,
-    this.hasMissingAvatar = false,
-  });
-
-  final bool hasDefaultPin;
-  final bool hasMissingAvatar;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      children: [
-        _SettingsTile(
-          icon: Icons.person_outline_rounded,
-          title: 'Perfil e identidad',
-          subtitle: hasMissingAvatar
-              ? '⚠️ Foto de perfil pendiente (Toca para agregar)'
-              : 'Nombre, foto, alias @usuario y pronombres',
-          badgeCount: hasMissingAvatar ? 1 : null,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
-            );
-          },
-        ),
-        _SettingsTile(
-          icon: Icons.visibility_off_outlined,
-          title: 'Privacidad y camuflaje',
-          subtitle: hasDefaultPin
-              ? '⚠️ PIN secreto por defecto 1234 (Toca para cambiar)'
-              : 'Modo señuelo, botón de pánico y PIN secreto',
-          badgeCount: hasDefaultPin ? 1 : null,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const CamouflageSettingsPage()),
-            );
-          },
-        ),
-        _SettingsTile(
-          icon: Icons.security_rounded,
-          title: 'Seguridad',
-          subtitle: 'Aislamiento de datos, permisos y sesiones',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SecuritySettingsPage()),
-            );
-          },
-        ),
-        _SettingsTile(
-          icon: Icons.notifications_outlined,
-          title: 'Notificaciones',
-          subtitle: 'Alertas discretas de mensajes y llamadas',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Notificaciones discretas activas por defecto.')),
-            );
-          },
-        ),
-        _SettingsTile(
-          icon: Icons.share_rounded,
-          iconColor: const Color(0xFF25D366),
-          title: 'Invitar amigos por WhatsApp',
-          subtitle: 'Comparte tu @alias para conectar en InclusiChat',
-          onTap: () => InviteService.inviteViaWhatsApp(),
-        ),
-        _SettingsTile(
-          icon: Icons.menu_book_rounded,
-          title: 'Guía de uso y funciones',
-          subtitle: 'Aprende cómo usar el alias, camuflaje y llamadas',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const UserGuidePage()),
-            );
-          },
-        ),
-        _SettingsTile(
-          icon: Icons.info_outline_rounded,
-          title: 'Acerca de InclusiChat',
-          subtitle: 'Versión 1.2.9, autor, derechos y licencias',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const AboutPage()),
-            );
-          },
-        ),
-        const Divider(height: 24),
-        _SettingsTile(
-          icon: Icons.logout_rounded,
-          iconColor: AppColors.error,
-          title: 'Cerrar sesión',
-          subtitle: 'Desconectar tu cuenta de este dispositivo',
-          onTap: () async {
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Cerrar sesión'),
-                content: const Text('¿Deseas cerrar tu sesión en este dispositivo?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(false),
-                    child: const Text('Cancelar'),
-                  ),
-                  FilledButton(
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                    onPressed: () => Navigator.of(ctx).pop(true),
-                    child: const Text('Cerrar sesión'),
-                  ),
-                ],
-              ),
-            );
-            if (confirm == true) {
-              await AuthService().signOut();
-            }
-          },
-        ),
-        const SizedBox(height: 18),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            'InclusiChat v1.2.9 • Hecho con 💜 por Ermógenes Rodríguez Fernández & Baremetal Academy',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              height: 1.4,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.iconColor,
-    this.badgeCount,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final Color? iconColor;
-  final String title;
-  final String subtitle;
-  final int? badgeCount;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = iconColor ?? AppColors.primary;
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: color),
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: iconColor,
-              ),
-            ),
-          ),
-          if (badgeCount != null && badgeCount! > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.error,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$badgeCount',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-        ],
-      ),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right_rounded),
     );
   }
 }
