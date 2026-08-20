@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
 import '../../../theme/app_colors.dart';
@@ -834,34 +833,32 @@ class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTic
 
   Future<void> _startRecording() async {
     try {
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) {
+      final hasPerm = await _recorder.hasPermission();
+      if (!hasPerm) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Se requiere permiso de micrófono para notas de voz.')),
+            const SnackBar(content: Text('Se requiere permiso de micrófono para grabar notas de voz.')),
           );
           Navigator.of(context).pop();
         }
         return;
       }
 
-      if (await _recorder.hasPermission()) {
-        final tempDir = await getTemporaryDirectory();
-        final path = '${tempDir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        await _recorder.start(
-          const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
-          path: path,
-        );
-        if (mounted) {
-          setState(() {
-            _recordedPath = path;
-          });
-          _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-            if (mounted) {
-              setState(() => _seconds++);
-            }
-          });
-        }
+      final tempDir = await getTemporaryDirectory();
+      final path = '${tempDir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
+        path: path,
+      );
+      if (mounted) {
+        setState(() {
+          _recordedPath = path;
+        });
+        _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) {
+            setState(() => _seconds++);
+          }
+        });
       }
     } catch (e) {
       debugPrint('Recording start error: $e');
