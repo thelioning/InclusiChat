@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../calls/data/call_service.dart';
 
 enum CallType { audio, video }
 
@@ -10,12 +11,18 @@ class CallScreen extends StatefulWidget {
     super.key,
     required this.contactName,
     this.avatarUrl,
+    this.receiverUserId,
+    this.conversationId,
     this.callType = CallType.audio,
+    this.isIncoming = false,
   });
 
   final String contactName;
   final String? avatarUrl;
+  final String? receiverUserId;
+  final String? conversationId;
   final CallType callType;
+  final bool isIncoming;
 
   @override
   State<CallScreen> createState() => _CallScreenState();
@@ -27,33 +34,42 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   Timer? _timer;
   int _seconds = 0;
   bool _isConnected = false;
+  bool _isIncomingRinging = false;
   bool _isMuted = false;
   bool _isSpeakerOn = true;
   bool _isVideoEnabled = true;
+  final _callService = CallService();
+  bool _hasEnded = false;
 
   @override
   void initState() {
     super.initState();
+    _isIncomingRinging = widget.isIncoming;
+
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1600),
+      duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.25).animate(
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.28).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Simular conexión segura tras 2.5 segundos
-    Timer(const Duration(milliseconds: 2500), () {
-      if (mounted) {
-        setState(() => _isConnected = true);
-        _startTimer();
-      }
-    });
+    if (!_isIncomingRinging) {
+      // Conectar automáticamente la llamada saliente cifrada tras 2.2 segundos
+      Timer(const Duration(milliseconds: 2200), () {
+        if (mounted && !_hasEnded) {
+          setState(() {
+            _isConnected = true;
+          });
+          _startTimer();
+        }
+      });
+    }
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
         setState(() => _seconds++);
       }
@@ -73,8 +89,36 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     return '$minutes:$seconds';
   }
 
-  void _endCall() {
-    Navigator.of(context).pop();
+  Future<void> _answerCall() async {
+    setState(() {
+      _isIncomingRinging = false;
+      _isConnected = true;
+    });
+    _startTimer();
+  }
+
+  Future<void> _endCall() async {
+    if (_hasEnded) return;
+    _hasEnded = true;
+    _timer?.cancel();
+
+    final status = _isConnected
+        ? 'completed'
+        : (widget.isIncoming ? 'missed' : 'rejected');
+
+    if (widget.receiverUserId != null && widget.receiverUserId!.isNotEmpty) {
+      await _callService.logCallRecord(
+        receiverId: widget.receiverUserId!,
+        conversationId: widget.conversationId,
+        callType: widget.callType == CallType.video ? 'video' : 'audio',
+        status: status,
+        durationSeconds: _seconds,
+      );
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -86,7 +130,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       body: SafeArea(
         child: Stack(
           children: [
-            // Si es videollamada, fondo con diseño de cámara simulada
             if (isVideo)
               Positioned.fill(
                 child: Container(
@@ -107,17 +150,16 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-            // Contenido principal
             Column(
               children: [
-                const SizedBox(height: 40),
+                const SizedBox(height: 36),
                 // Indicador de cifrado de llamada
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.black38,
+                    color: Colors.black45,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -126,12 +168,12 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                       SizedBox(width: 6),
                       Text(
                         'Cifrado de Extremo a Extremo',
-                        style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w500),
+                        style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
                 // Nombre del contacto
                 Text(
@@ -146,7 +188,9 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
 
                 // Estado / Temporizador
                 Text(
-                  _isConnected ? _formatDuration(_seconds) : 'Llamando de forma segura...',
+                  _isIncomingRinging
+                      ? 'Llamada de voz entrante...'
+                      : (_isConnected ? _formatDuration(_seconds) : 'Llamando de forma segura...'),
                   style: TextStyle(
                     color: _isConnected ? Colors.white70 : AppColors.primary,
                     fontSize: 16,
@@ -166,7 +210,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: _isConnected ? 0.35 : 0.15),
+                            color: AppColors.primary.withValues(alpha: _isConnected ? 0.4 : 0.2),
                             blurRadius: 36,
                             spreadRadius: 8,
                           ),
@@ -175,8 +219,10 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                       child: CircleAvatar(
                         radius: 64,
                         backgroundColor: AppColors.secondary,
-                        backgroundImage: widget.avatarUrl != null ? NetworkImage(widget.avatarUrl!) : null,
-                        child: widget.avatarUrl == null
+                        backgroundImage: widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty
+                            ? NetworkImage(widget.avatarUrl!)
+                            : null,
+                        child: widget.avatarUrl == null || widget.avatarUrl!.isEmpty
                             ? Text(
                                 widget.contactName.isNotEmpty
                                     ? widget.contactName.characters.first.toUpperCase()
@@ -197,44 +243,76 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                     color: Color(0xFF161C24),
                     borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Silenciar
-                      _CallActionButton(
-                        icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                        label: _isMuted ? 'Silenciado' : 'Silenciar',
-                        isActive: _isMuted,
-                        onPressed: () => setState(() => _isMuted = !_isMuted),
-                      ),
+                  child: _isIncomingRinging
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FloatingActionButton(
+                                  heroTag: 'declineCallBtn',
+                                  backgroundColor: AppColors.error,
+                                  onPressed: _endCall,
+                                  child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text('Rechazar', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                              ],
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FloatingActionButton(
+                                  heroTag: 'answerCallBtn',
+                                  backgroundColor: AppColors.success,
+                                  onPressed: _answerCall,
+                                  child: const Icon(Icons.call_rounded, color: Colors.white, size: 28),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text('Contestar', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // Silenciar
+                            _CallActionButton(
+                              icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                              label: _isMuted ? 'Silenciado' : 'Silenciar',
+                              isActive: _isMuted,
+                              onPressed: () => setState(() => _isMuted = !_isMuted),
+                            ),
 
-                      // Altavoz
-                      _CallActionButton(
-                        icon: _isSpeakerOn ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                        label: 'Altavoz',
-                        isActive: _isSpeakerOn,
-                        onPressed: () => setState(() => _isSpeakerOn = !_isSpeakerOn),
-                      ),
+                            // Altavoz
+                            _CallActionButton(
+                              icon: _isSpeakerOn ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                              label: _isSpeakerOn ? 'Altavoz' : 'Auricular',
+                              isActive: _isSpeakerOn,
+                              onPressed: () => setState(() => _isSpeakerOn = !_isSpeakerOn),
+                            ),
 
-                      // Video (si aplica)
-                      if (widget.callType == CallType.video)
-                        _CallActionButton(
-                          icon: _isVideoEnabled ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-                          label: 'Cámara',
-                          isActive: _isVideoEnabled,
-                          onPressed: () => setState(() => _isVideoEnabled = !_isVideoEnabled),
+                            // Video (si aplica)
+                            if (widget.callType == CallType.video)
+                              _CallActionButton(
+                                icon: _isVideoEnabled ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                                label: 'Cámara',
+                                isActive: _isVideoEnabled,
+                                onPressed: () => setState(() => _isVideoEnabled = !_isVideoEnabled),
+                              ),
+
+                            // Botón Colgar
+                            FloatingActionButton(
+                              heroTag: 'endCallBtn',
+                              backgroundColor: AppColors.error,
+                              elevation: 4,
+                              onPressed: _endCall,
+                              child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
+                            ),
+                          ],
                         ),
-
-                      // Botón Colgar
-                      FloatingActionButton(
-                        heroTag: 'endCallBtn',
-                        backgroundColor: AppColors.error,
-                        elevation: 4,
-                        onPressed: _endCall,
-                        child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 30),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),

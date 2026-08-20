@@ -457,6 +457,40 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- 7. TABLA DE REGISTROS DE LLAMADAS (HISTORIAL Y SEÑALIZACIÓN)
+create table if not exists public.call_records (
+  id uuid primary key default gen_random_uuid(),
+  caller_id uuid not null references public.profiles(id) on delete cascade,
+  receiver_id uuid not null references public.profiles(id) on delete cascade,
+  conversation_id uuid references public.conversations(id) on delete set null,
+  call_type text default 'audio' check (call_type in ('audio', 'video')),
+  status text default 'completed' check (status in ('completed', 'missed', 'rejected', 'busy', 'ongoing')),
+  duration_seconds integer default 0,
+  started_at timestamptz default now(),
+  ended_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+alter table public.call_records enable row level security;
+
+drop policy if exists "Los usuarios pueden ver su historial de llamadas" on public.call_records;
+create policy "Los usuarios pueden ver su historial de llamadas"
+  on public.call_records for select
+  to authenticated
+  using (auth.uid() = caller_id or auth.uid() = receiver_id);
+
+drop policy if exists "Los usuarios pueden registrar llamadas" on public.call_records;
+create policy "Los usuarios pueden registrar llamadas"
+  on public.call_records for insert
+  to authenticated
+  with check (auth.uid() = caller_id or auth.uid() = receiver_id);
+
+drop policy if exists "Los usuarios pueden actualizar llamadas en curso" on public.call_records;
+create policy "Los usuarios pueden actualizar llamadas en curso"
+  on public.call_records for update
+  to authenticated
+  using (auth.uid() = caller_id or auth.uid() = receiver_id);
+
 -- Habilitar publicaciones Realtime de forma segura
 do $$
 begin
@@ -479,6 +513,13 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'contact_requests'
   ) then
     alter publication supabase_realtime add table public.contact_requests;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'call_records'
+  ) then
+    alter publication supabase_realtime add table public.call_records;
   end if;
 end $$;
 

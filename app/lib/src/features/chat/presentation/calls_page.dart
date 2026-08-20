@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../calls/data/call_service.dart';
 import '../data/chat_service.dart';
 import 'call_screen.dart';
 
@@ -14,15 +15,17 @@ class CallsPage extends StatefulWidget {
 
 class _CallsPageState extends State<CallsPage> {
   final _chatService = ChatService();
+  final _callService = CallService();
   List<ContactProfile> _contacts = [];
+  List<CallRecord> _callHistory = [];
   bool _isLoading = true;
   Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadContacts(initial: true);
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _loadContacts(initial: false));
+    _loadData(initial: true);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) => _loadData(initial: false));
   }
 
   @override
@@ -31,13 +34,17 @@ class _CallsPageState extends State<CallsPage> {
     super.dispose();
   }
 
-  Future<void> _loadContacts({bool initial = false}) async {
+  Future<void> _loadData({bool initial = false}) async {
     if (initial && mounted) setState(() => _isLoading = true);
     try {
-      final contacts = await _chatService.loadContacts();
+      final contactsFuture = _chatService.loadContacts();
+      final historyFuture = _callService.loadCallHistory();
+      final results = await Future.wait([contactsFuture, historyFuture]);
+
       if (mounted) {
         setState(() {
-          _contacts = contacts;
+          _contacts = results[0] as List<ContactProfile>;
+          _callHistory = results[1] as List<CallRecord>;
           _isLoading = false;
         });
       }
@@ -46,16 +53,24 @@ class _CallsPageState extends State<CallsPage> {
     }
   }
 
-  void _startCall(ContactProfile contact, CallType type) {
+  void _startCall({
+    required String contactName,
+    String? avatarUrl,
+    required String receiverUserId,
+    String? conversationId,
+    required CallType type,
+  }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => CallScreen(
-          contactName: contact.displayName,
-          avatarUrl: contact.avatarUrl,
+          contactName: contactName,
+          avatarUrl: avatarUrl,
+          receiverUserId: receiverUserId,
+          conversationId: conversationId,
           callType: type,
         ),
       ),
-    );
+    ).then((_) => _loadData(initial: false));
   }
 
   void _openNewCallSheet() {
@@ -137,14 +152,24 @@ class _CallsPageState extends State<CallsPage> {
                             icon: const Icon(Icons.call_rounded, color: AppColors.primary),
                             onPressed: () {
                               Navigator.of(ctx).pop();
-                              _startCall(contact, CallType.audio);
+                              _startCall(
+                                contactName: contact.displayName,
+                                avatarUrl: contact.avatarUrl,
+                                receiverUserId: contact.id,
+                                type: CallType.audio,
+                              );
                             },
                           ),
                           IconButton(
                             icon: const Icon(Icons.videocam_rounded, color: AppColors.primary),
                             onPressed: () {
                               Navigator.of(ctx).pop();
-                              _startCall(contact, CallType.video);
+                              _startCall(
+                                contactName: contact.displayName,
+                                avatarUrl: contact.avatarUrl,
+                                receiverUserId: contact.id,
+                                type: CallType.video,
+                              );
                             },
                           ),
                         ],
@@ -160,6 +185,16 @@ class _CallsPageState extends State<CallsPage> {
     );
   }
 
+  String _formatCallDate(DateTime dt) {
+    final now = DateTime.now();
+    final local = dt.toLocal();
+    final isToday = local.year == now.year && local.month == now.month && local.day == now.day;
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    if (isToday) return 'Hoy, $hour:$minute';
+    return '${local.day}/${local.month}, $hour:$minute';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -169,7 +204,7 @@ class _CallsPageState extends State<CallsPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
-        onRefresh: () => _loadContacts(initial: false),
+        onRefresh: () => _loadData(initial: false),
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
@@ -200,6 +235,80 @@ class _CallsPageState extends State<CallsPage> {
             ),
             const SizedBox(height: 20),
 
+            // Historial de llamadas recientes (si hay)
+            if (_callHistory.isNotEmpty) ...[
+              const Text(
+                'Llamadas recientes',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 10),
+              ..._callHistory.map((call) {
+                final isMissed = call.status == 'missed' || call.status == 'rejected';
+                final iconColor = isMissed
+                    ? AppColors.error
+                    : (call.isOutgoing ? AppColors.primary : AppColors.success);
+
+                final statusIcon = isMissed
+                    ? Icons.call_missed_rounded
+                    : (call.isOutgoing ? Icons.call_made_rounded : Icons.call_received_rounded);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: AppColors.surfaceRaised,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    leading: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: AppColors.secondary,
+                      backgroundImage: call.otherUserAvatar != null && call.otherUserAvatar!.isNotEmpty
+                          ? NetworkImage(call.otherUserAvatar!)
+                          : null,
+                      child: call.otherUserAvatar == null || call.otherUserAvatar!.isEmpty
+                          ? Text(
+                              call.otherUserName.isNotEmpty ? call.otherUserName[0].toUpperCase() : '?',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                            )
+                          : null,
+                    ),
+                    title: Text(
+                      call.otherUserName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: isMissed ? AppColors.error : Colors.white,
+                      ),
+                    ),
+                    subtitle: Row(
+                      children: [
+                        Icon(statusIcon, color: iconColor, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_formatCallDate(call.startedAt)} • ${call.formattedDuration}',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    trailing: IconButton(
+                      tooltip: 'Llamar de nuevo',
+                      icon: Icon(
+                        call.callType == 'video' ? Icons.videocam_rounded : Icons.call_rounded,
+                        color: AppColors.primary,
+                      ),
+                      onPressed: () => _startCall(
+                        contactName: call.otherUserName,
+                        avatarUrl: call.otherUserAvatar,
+                        receiverUserId: call.otherUserId,
+                        conversationId: call.conversationId,
+                        type: call.callType == 'video' ? CallType.video : CallType.audio,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 20),
+            ],
+
             const Text(
               'Contactos para llamar',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
@@ -208,7 +317,7 @@ class _CallsPageState extends State<CallsPage> {
 
             if (_contacts.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
+                padding: const EdgeInsets.symmetric(vertical: 30),
                 child: Center(
                   child: Column(
                     children: [
@@ -269,12 +378,22 @@ class _CallsPageState extends State<CallsPage> {
                         IconButton(
                           tooltip: 'Llamada de voz',
                           icon: const Icon(Icons.call_rounded, color: AppColors.primary),
-                          onPressed: () => _startCall(contact, CallType.audio),
+                          onPressed: () => _startCall(
+                            contactName: contact.displayName,
+                            avatarUrl: contact.avatarUrl,
+                            receiverUserId: contact.id,
+                            type: CallType.audio,
+                          ),
                         ),
                         IconButton(
                           tooltip: 'Videollamada',
                           icon: const Icon(Icons.videocam_rounded, color: AppColors.primary),
-                          onPressed: () => _startCall(contact, CallType.video),
+                          onPressed: () => _startCall(
+                            contactName: contact.displayName,
+                            avatarUrl: contact.avatarUrl,
+                            receiverUserId: contact.id,
+                            type: CallType.video,
+                          ),
                         ),
                       ],
                     ),

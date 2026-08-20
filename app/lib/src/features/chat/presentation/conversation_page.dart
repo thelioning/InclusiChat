@@ -178,31 +178,41 @@ class _ConversationPageState extends State<ConversationPage> {
         actions: [
           IconButton(
             tooltip: 'Videollamada',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => CallScreen(
-                    contactName: widget.title,
-                    avatarUrl: widget.avatarUrl,
-                    callType: CallType.video,
+            onPressed: () async {
+              final otherId = await _service.getOtherParticipantId(widget.conversationId);
+              if (context.mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CallScreen(
+                      contactName: widget.title,
+                      avatarUrl: widget.avatarUrl,
+                      receiverUserId: otherId,
+                      conversationId: widget.conversationId,
+                      callType: CallType.video,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             },
             icon: const Icon(Icons.videocam_outlined),
           ),
           IconButton(
             tooltip: 'Llamada de voz',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => CallScreen(
-                    contactName: widget.title,
-                    avatarUrl: widget.avatarUrl,
-                    callType: CallType.audio,
+            onPressed: () async {
+              final otherId = await _service.getOtherParticipantId(widget.conversationId);
+              if (context.mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CallScreen(
+                      contactName: widget.title,
+                      avatarUrl: widget.avatarUrl,
+                      receiverUserId: otherId,
+                      conversationId: widget.conversationId,
+                      callType: CallType.audio,
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             },
             icon: const Icon(Icons.call_outlined),
           ),

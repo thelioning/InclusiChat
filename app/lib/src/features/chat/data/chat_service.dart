@@ -1053,6 +1053,21 @@ class ChatService {
     } catch (_) {}
   }
 
+  Future<String?> getOtherParticipantId(String conversationId) async {
+    try {
+      final rows = await _client
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId)
+          .neq('user_id', _userId)
+          .limit(1);
+      if ((rows as List).isNotEmpty) {
+        return rows.first['user_id']?.toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   bool isOwnMessage(Map<String, dynamic> message) =>
       message['sender_id'] == _userId;
 }
