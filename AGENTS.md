@@ -90,8 +90,10 @@ Antes de modificar el proyecto, lee completamente:
 1. `.codex/repair/REPAIR_STANDARD.md`
 2. `.codex/repair/REPAIR_CHECKLIST.md`
 3. `.codex/repair/REPAIR_REPORT_TEMPLATE.md`
+4. `docs/repair/REPAIR_ROADMAP.md`
+5. `docs/release/PRODUCTION_RELEASE_PLAN.md`
 
-La reparación debe basarse en hallazgos `AUD-XXX`.
+La reparación debe basarse en hallazgos `AUD-XXX` y/o puntos `REP-XXX` de la ruta vigente.
 
 No realizar refactorización masiva sin justificación técnica y autorización.
 
@@ -148,3 +150,30 @@ Al terminar la reparación:
 7. Identificar regresiones nuevas.
 
 No declarar el proyecto listo para producción solo porque los archivos fueron modificados.
+
+## 7. Ruta obligatoria hacia producción
+
+`docs/repair/REPAIR_ROADMAP.md` y `docs/release/PRODUCTION_RELEASE_PLAN.md` forman parte del contrato técnico del repositorio.
+
+Todo desarrollador, agente o proceso automatizado que vaya a reparar, ampliar o preparar una release debe leer ambos documentos antes de comenzar.
+
+### Reglas obligatorias
+
+- Las reparaciones deben indicar qué `REP-XXX` cierran o qué riesgo documentado atienden.
+- No agregar funciones no esenciales mientras exista un P0 abierto, salvo que el cambio sea necesario para cerrarlo.
+- Un P0/P1 no se considera cerrado con pruebas puramente estáticas cuando el riesgo requiere validación de comportamiento.
+- Cambios en Supabase deben existir como migraciones versionadas y probarse primero en staging.
+- Cambios de sesión, push, contactos, Storage o llamadas requieren pruebas con más de una identidad/dispositivo cuando corresponda.
+- Si una función no está completamente implementada para producción, debe quedar oculta o deshabilitada en el build release.
+- No afirmar E2EE mientras el servidor pueda leer el contenido.
+- No declarar llamadas de voz/video funcionales si solo existe señalización.
+- No utilizar `Release Estable` o `Production` hasta pasar el Definition of Done de `PRODUCTION_RELEASE_PLAN.md`.
+- Cualquier cambio que altere el orden, alcance o gate de release debe actualizar estos documentos en el mismo PR.
+
+### Estado DONE
+
+El único estado que autoriza una publicación estable es:
+
+`DONE — PRODUCTION RELEASE`
+
+Ese estado solo puede asignarse después de aprobar todos los gates A–H definidos en `docs/release/PRODUCTION_RELEASE_PLAN.md` sobre el commit exacto que se publicará.
