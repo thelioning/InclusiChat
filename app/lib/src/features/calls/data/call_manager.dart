@@ -10,7 +10,10 @@ class CallManager {
   bool isCallActive = false;
   String? currentCallId;
 
-  /// Abre la pantalla de llamada entrante asegurando que nunca se duplique
+  /// Abre la pantalla de llamada entrante asegurando que nunca se duplique.
+  /// Mientras la app está en segundo plano se conserva la interfaz nativa;
+  /// la pantalla Flutter solo se abre al estar visible o al aceptar desde
+  /// el sistema.
   void showIncomingCall({
     required String callId,
     required String callerName,
@@ -20,6 +23,10 @@ class CallManager {
     String callType = 'audio',
     bool acceptedFromSystem = false,
   }) {
+    if (!acceptedFromSystem &&
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
     if (isCallActive || currentCallId == callId) return;
 
     isCallActive = true;
@@ -28,6 +35,7 @@ class CallManager {
     final nav = rootNavigatorKey.currentState;
     if (nav == null) {
       isCallActive = false;
+      currentCallId = null;
       return;
     }
 
