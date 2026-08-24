@@ -56,4 +56,42 @@ void main() {
     expect(nativeService, contains('CallEventActionCallAccept'));
     expect(nativeService, contains('CallEventActionCallDecline'));
   });
+
+  test('logout unregisters this device token and resets push listeners', () {
+    final pushService = File(
+      'lib/src/features/calls/data/push_notification_service.dart',
+    ).readAsStringSync();
+    final authService = File(
+      'lib/src/features/auth/data/auth_service.dart',
+    ).readAsStringSync();
+
+    expect(pushService, contains('unregisterCurrentUser'));
+    expect(pushService, contains(".from('device_push_tokens')"));
+    expect(pushService, contains(".eq('token', token)"));
+    expect(pushService, contains(".eq('user_id', userId)"));
+    expect(pushService, contains('_messaging.deleteToken()'));
+    expect(pushService, contains('await reset()'));
+    expect(authService,
+        contains('PushNotificationService.unregisterCurrentUser(client: _client)'));
+    expect(
+      authService.indexOf('PushNotificationService.unregisterCurrentUser'),
+      lessThan(authService.indexOf('_client.auth.signOut()')),
+    );
+  });
+
+  test('push initialization is bound to the authenticated account', () {
+    final pushService = File(
+      'lib/src/features/calls/data/push_notification_service.dart',
+    ).readAsStringSync();
+    final function = File(
+      '../supabase/functions/send-call-notification/index.ts',
+    ).readAsStringSync();
+
+    expect(pushService, contains('_initializedUserId'));
+    expect(pushService, contains('_registeredToken'));
+    expect(pushService, contains('_initializedUserId == user.id'));
+    expect(pushService, contains('currentUser.id != _initializedUserId'));
+    expect(pushService, contains("data['receiver_id']"));
+    expect(function, contains('receiver_id: body.receiver_id'));
+  });
 }
