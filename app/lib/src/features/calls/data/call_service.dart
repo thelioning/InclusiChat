@@ -114,8 +114,7 @@ class CallService {
     final pushData = pushResponse.data;
     if (pushData is! Map || (pushData['delivered'] as num? ?? 0) < 1) {
       throw Exception(
-        'No hay un dispositivo disponible para recibir la llamada',
-      );
+          'No hay un dispositivo disponible para recibir la llamada');
     }
 
     try {
