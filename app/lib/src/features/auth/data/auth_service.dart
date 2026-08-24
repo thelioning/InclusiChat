@@ -1,5 +1,8 @@
 import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../calls/data/push_notification_service.dart';
 
 class AuthService {
   AuthService({SupabaseClient? client})
@@ -93,7 +96,18 @@ class AuthService {
     );
   }
 
-  Future<void> signOut() => _client.auth.signOut();
+  Future<void> signOut() async {
+    await PushNotificationService.prepareForSignOut();
+    try {
+      await _client.auth.signOut();
+    } catch (_) {
+      // If Supabase fails to destroy the session, restore push registration
+      // for the still-authenticated account instead of leaving it half logged
+      // in without notifications.
+      await PushNotificationService.initializeForCurrentUser();
+      rethrow;
+    }
+  }
 
   Future<void> resendConfirmation({required String email}) async {
     await _client.auth.resend(
