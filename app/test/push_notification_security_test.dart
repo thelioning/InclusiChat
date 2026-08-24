@@ -22,20 +22,22 @@ void main() {
     expect(service, contains("data['event'] != 'incoming_call'"));
   });
 
-  test('call push function authenticates membership and keeps keys server-side',
-      () {
-    final function = File(
-      '../supabase/functions/send-call-notification/index.ts',
-    ).readAsStringSync();
-    final callService = File(
-      'lib/src/features/calls/data/call_service.dart',
-    ).readAsStringSync();
-    expect(function, contains('userClient.auth.getUser()'));
-    expect(function, contains('Conversation membership denied'));
-    expect(function, contains('FIREBASE_SERVICE_ACCOUNT_B64'));
-    expect(function, isNot(contains('private_key":')));
-    expect(callService, contains("'send-call-notification'"));
-  });
+  test(
+    'call push function authenticates membership and keeps keys server-side',
+    () {
+      final function = File(
+        '../supabase/functions/send-call-notification/index.ts',
+      ).readAsStringSync();
+      final callService = File(
+        'lib/src/features/calls/data/call_service.dart',
+      ).readAsStringSync();
+      expect(function, contains('userClient.auth.getUser()'));
+      expect(function, contains('Conversation membership denied'));
+      expect(function, contains('FIREBASE_SERVICE_ACCOUNT_B64'));
+      expect(function, isNot(contains('private_key":')));
+      expect(callService, contains("'send-call-notification'"));
+    },
+  );
 
   test('background calls use urgent data messages and native call UI', () {
     final function = File(
@@ -55,5 +57,36 @@ void main() {
     expect(nativeService, contains('isShowFullLockedScreen: true'));
     expect(nativeService, contains('CallEventActionCallAccept'));
     expect(nativeService, contains('CallEventActionCallDecline'));
+  });
+
+  test('logout detaches the device token from the previous account', () {
+    final pushService = File(
+      'lib/src/features/calls/data/push_notification_service.dart',
+    ).readAsStringSync();
+    final authService = File(
+      'lib/src/features/auth/data/auth_service.dart',
+    ).readAsStringSync();
+    final function = File(
+      '../supabase/functions/send-call-notification/index.ts',
+    ).readAsStringSync();
+
+    expect(pushService, contains('prepareForSignOut'));
+    expect(pushService, contains(".from('device_push_tokens')"));
+    expect(pushService, contains(".eq('token', token)"));
+    expect(pushService, contains(".eq('user_id', userId)"));
+    expect(pushService, contains('_messaging.deleteToken()'));
+    expect(pushService, contains('_initializedUserId'));
+    expect(pushService, contains('_pushOwnerKey'));
+    expect(pushService, contains("message.data['receiver_id']"));
+    expect(
+      authService,
+      contains('PushNotificationService.prepareForSignOut()'),
+    );
+    expect(authService, contains('if (_client.auth.currentUser != null)'));
+    expect(
+      authService,
+      contains('PushNotificationService.initializeForCurrentUser()'),
+    );
+    expect(function, contains('receiver_id: body.receiver_id'));
   });
 }

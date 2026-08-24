@@ -1,5 +1,8 @@
 import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../calls/data/push_notification_service.dart';
 
 class AuthService {
   AuthService({SupabaseClient? client})
@@ -93,7 +96,20 @@ class AuthService {
     );
   }
 
-  Future<void> signOut() => _client.auth.signOut();
+  Future<void> signOut() async {
+    try {
+      await PushNotificationService.prepareForSignOut();
+      await _client.auth.signOut();
+    } catch (_) {
+      // Any cleanup failure happens while the Supabase session may still be
+      // alive. Re-register push for that account instead of leaving a signed-in
+      // user with the local push ownership already cleared.
+      if (_client.auth.currentUser != null) {
+        await PushNotificationService.initializeForCurrentUser();
+      }
+      rethrow;
+    }
+  }
 
   Future<void> resendConfirmation({required String email}) async {
     await _client.auth.resend(

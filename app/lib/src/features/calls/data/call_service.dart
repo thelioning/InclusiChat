@@ -76,7 +76,6 @@ class CallService {
     if (uid == null) throw Exception('No autenticado');
     if (callId.isEmpty) throw ArgumentError.value(callId, 'callId');
 
-    // Obtener nombre del usuario actual
     String callerName = 'Usuario';
     String? callerAvatar;
     try {
@@ -114,7 +113,8 @@ class CallService {
     );
     final pushData = pushResponse.data;
     if (pushData is! Map || (pushData['delivered'] as num? ?? 0) < 1) {
-      throw Exception('No hay un dispositivo disponible para recibir la llamada');
+      throw Exception(
+          'No hay un dispositivo disponible para recibir la llamada');
     }
 
     try {
@@ -225,7 +225,7 @@ class CallService {
             meta['call_id'] == callId) {
           final action = meta['action'] as String?;
           if (action != null) {
-            return action; // 'start', 'accept', 'reject', 'end'
+            return action;
           }
         }
       }
@@ -239,7 +239,6 @@ class CallService {
       final uid = currentUserId;
       if (uid == null) return null;
 
-      // Cargar mis conversaciones activas
       final myParts = await _client
           .from('conversation_participants')
           .select('conversation_id')
@@ -252,7 +251,6 @@ class CallService {
 
       if (myConvIds.isEmpty) return null;
 
-      // Buscar mensajes de llamada tipo 'start' de otro emisor en los últimos 35 segundos
       final rows = await _client
           .from('messages')
           .select('id, conversation_id, sender_id, metadata, created_at')
@@ -275,9 +273,10 @@ class CallService {
             final diffSeconds =
                 now.toUtc().difference(createdAt.toUtc()).inSeconds;
             if (diffSeconds >= 0 && diffSeconds <= 35) {
-              // Verificar si ya fue aceptada, rechazada o terminada
               final hasEndedOrAnswered = await _isCallAlreadyHandled(
-                  row['conversation_id'] as String, callId);
+                row['conversation_id'] as String,
+                callId,
+              );
               if (!hasEndedOrAnswered) {
                 return {
                   'call_id': callId,
@@ -299,7 +298,9 @@ class CallService {
   }
 
   Future<bool> _isCallAlreadyHandled(
-      String conversationId, String callId) async {
+    String conversationId,
+    String callId,
+  ) async {
     try {
       final rows = await _client
           .from('messages')
@@ -370,21 +371,23 @@ class CallService {
           final senderAvatar = senderProfile?['avatar_url'] as String?;
           final senderId = row['sender_id'].toString();
 
-          history.add(CallRecord(
-            id: row['id'].toString(),
-            callerId: senderId,
-            receiverId: uid,
-            conversationId: row['conversation_id']?.toString(),
-            callType: meta['call_type'] as String? ?? 'audio',
-            status: meta['status'] as String? ?? 'completed',
-            durationSeconds: meta['duration'] as int? ?? 0,
-            startedAt: DateTime.tryParse(row['created_at'].toString()) ??
-                DateTime.now(),
-            isOutgoing: isOut,
-            otherUserName: senderName,
-            otherUserAvatar: senderAvatar,
-            otherUserId: senderId,
-          ));
+          history.add(
+            CallRecord(
+              id: row['id'].toString(),
+              callerId: senderId,
+              receiverId: uid,
+              conversationId: row['conversation_id']?.toString(),
+              callType: meta['call_type'] as String? ?? 'audio',
+              status: meta['status'] as String? ?? 'completed',
+              durationSeconds: meta['duration'] as int? ?? 0,
+              startedAt: DateTime.tryParse(row['created_at'].toString()) ??
+                  DateTime.now(),
+              isOutgoing: isOut,
+              otherUserName: senderName,
+              otherUserAvatar: senderAvatar,
+              otherUserId: senderId,
+            ),
+          );
         }
       }
 

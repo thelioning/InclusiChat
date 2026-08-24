@@ -4,14 +4,14 @@ Este archivo indica el punto exacto de la ruta. Debe leerse junto con `REPAIR_RO
 
 **Última actualización:** 2026-08-24  
 **Base auditada:** `196d5356c7df93d74e061622cd81d1c280b4d32c`  
-**Rama activa:** `repair/rep-001-security-baseline`
+**Rama activa:** `repair/rep-002-fcm-lifecycle`
 
 ## Estado actual
 
 | Punto | Estado | Evidencia / nota |
 |---|---|---|
 | REP-001 | `VERIFICADO EN STAGING — PRODUCCIÓN PENDIENTE` | `docs/repair/evidence/REP-001_SCHEMA_RECONCILIATION.md` |
-| REP-002 | `P0 — ABIERTO` | Ciclo de vida del token FCM |
+| REP-002 | `CÓDIGO CORREGIDO — CI/DISPOSITIVO PENDIENTES` | `docs/repair/evidence/REP-002_FCM_TOKEN_LIFECYCLE.md` |
 | REP-003 | `P0 — ABIERTO` | Eliminación total de cuenta + Storage |
 | REP-004 | `P0 — ABIERTO` | Consentimiento de contacto impuesto por servidor |
 | REP-005 | `P0 — ABIERTO` | Firma/versionado/migración de instalaciones |
@@ -28,38 +28,49 @@ Este archivo indica el punto exacto de la ruta. Debe leerse junto con `REPAIR_RO
 | REP-016 | `P3 — ABIERTO` | Limpieza de repositorio |
 | REP-017 | `P3 — ABIERTO` | Textos/versión/estado del producto |
 
-## Gate actual
+## Gate REP-001
 
-REP-001 pasó las pruebas de comportamiento en `InclusiChat-Staging`.
+REP-001 pasó las pruebas de comportamiento en `InclusiChat-Staging`, pero producción no ha recibido DDL de esta reparación.
 
-**No está cerrado en producción.** El Supabase activo no ha recibido DDL de esta reparación.
+La secuencia validada de promoción sigue siendo:
 
-La secuencia correctiva validada en staging es:
+`009 → 010 → 011 → 012`
 
-1. `20260823_009_deployed_schema_reconciliation.sql`
-2. `20260823_010_private_helper_rebinding.sql`
-3. `20260824_011_contact_response_invoker.sql`
-4. `20260824_012_accept_contact_request_via_trigger.sql`
+Ningún agente debe promoverla sin backup, snapshot sin drift y autorización explícita.
 
-Las cuatro deben promoverse juntas y en ese orden si más adelante se autoriza producción.
+## Trabajo actual — REP-002
 
-Antes de promover:
+La corrección de ciclo de vida FCM está implementada en la rama activa:
 
-1. crear y verificar el backup manual descrito en `docs/repair/backup/FREE_PLAN_PRODUCTION_BACKUP.md`;
-2. repetir snapshot de producción y comprobar que no hubo drift;
-3. revisar `docs/repair/rollback/REP-001_ROLLBACK.md`;
-4. obtener autorización explícita del propietario;
-5. aplicar únicamente `009 → 010 → 011 → 012`;
-6. repetir pruebas A/B/C y Security/Performance Advisors inmediatamente después.
+- el dispositivo conserva de forma segura qué usuario posee el token registrado;
+- logout elimina solo el token exacto del dispositivo actual;
+- logout invalida además el token en Firebase;
+- las subscriptions se cancelan y `_initializedUserId` se limpia;
+- cambio inesperado de cuenta fuerza token nuevo;
+- el payload de llamada lleva `receiver_id`;
+- foreground/background descartan una llamada que no corresponda al propietario local;
+- `AuthService.signOut()` centraliza el cleanup;
+- `send-call-notification` con `receiver_id` está desplegada únicamente en staging.
+
+### Gate pendiente de REP-002
+
+No marcar `CERRADO` hasta completar:
+
+1. CI: `dart format`, `flutter analyze` y `flutter test` verdes;
+2. teléfono T1: login A → logout → login B;
+3. comprobar backend: token A/T1 eliminado y token B/T1 registrado;
+4. T1 no recibe llamadas destinadas a A después del logout;
+5. T1 sí recibe llamadas destinadas a B;
+6. A con dos dispositivos: logout T1 no elimina token T2;
+7. comprobar rotación de token;
+8. validar background, app terminada y pantalla bloqueada.
 
 ## Hallazgos incorporados al backlog
 
-1. **Rendimiento DB:** el Performance Advisor detecta optimización de RLS mediante `(select auth.uid())` y tres FK sin índice. Se tratará como optimización posterior, no mezclada con el cierre P0 de REP-001.
-2. **Código libre / reproducibilidad:** las migraciones históricas `001–008` no construyen una base completa desde cero. Antes de `v1.6.0` se debe generar y probar un baseline/squash limpio para nuevas instalaciones dentro de REP-009/REP-010.
-3. **RPC públicas:** tras la reconciliación, `accept_contact_request` y `reject_contact_request` ya son `SECURITY INVOKER`. Permanecen como `SECURITY DEFINER` solo RPC que requieren acceso controlado más allá de la RLS directa; deben seguir revisándose como superficie API.
+1. **Rendimiento DB:** optimización de RLS con `(select auth.uid())` y tres FK sin índice.
+2. **Código libre / reproducibilidad:** antes de `v1.6.0` debe existir un baseline/squash reproducible para una instalación Supabase nueva.
+3. **RPC públicas:** mantener revisión explícita de toda RPC `SECURITY DEFINER` como superficie API.
 
 ## Regla de producción
 
-Ningún desarrollador o agente debe interpretar `VERIFICADO EN STAGING` como permiso para ejecutar DDL en producción.
-
-La promoción requiere autorización explícita, backup verificable y snapshot previo sin drift.
+`VERIFICADO EN STAGING` o `CÓDIGO CORREGIDO` nunca equivalen a permiso de producción. Toda promoción requiere sus gates y autorización explícita correspondiente.
