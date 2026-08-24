@@ -1,7 +1,7 @@
 # REP-001 — Reconciliación del esquema desplegado
 
 **Estado:** `CORREGIDO Y VERIFICADO EN STAGING — PRODUCCIÓN PENDIENTE DE AUTORIZACIÓN`  
-**Fecha:** 2026-08-23  
+**Fecha:** 2026-08-24  
 **Base GitHub:** `196d5356c7df93d74e061622cd81d1c280b4d32c` + ruta de reparación  
 **Rama:** `repair/rep-001-security-baseline`
 
@@ -9,36 +9,31 @@
 
 No se aplicó ningún DDL correctivo a `InclusiChat` producción. Toda escritura y prueba de REP-001 se ejecutó en el proyecto aislado `InclusiChat-Staging`.
 
-El baseline de staging no contiene datos personales ni datos copiados desde producción.
+El staging usa datos ficticios y no contiene datos personales copiados desde producción.
 
 ## 2. Estado real encontrado en producción
 
-La inspección de producción fue exclusivamente de lectura. Se confirmó un esquema parcialmente migrado y no reproducible simplemente ejecutando `001–008` a ciegas.
+La inspección de producción fue exclusivamente de lectura. Se confirmó un esquema parcialmente migrado y con drift:
 
-Hallazgos principales:
-
-- políticas heredadas `FOR ALL` con `USING (true)`/`WITH CHECK (true)` en `contacts`, `contact_requests`, `conversation_participants`, `conversations` y `messages`;
+- políticas heredadas `FOR ALL` con `USING (true)`/`WITH CHECK (true)` en tablas críticas;
 - lectura universal heredada en `message_receipts`;
-- `profiles_select_policy` permitía lectura amplia;
-- múltiples funciones `SECURITY DEFINER` permanecían ejecutables por `anon` y/o `authenticated`;
-- varias funciones tenían `search_path=public` o mutable;
-- `citext` estaba instalado en el esquema expuesto `public`;
-- `contact_requests` no tenía columna `updated_at`, aunque `send_contact_request`, `accept_contact_request` y `reject_contact_request` intentaban escribirla;
-- `delete_message_for_me(uuid)` no estaba desplegada aunque la migración `001` la define;
-- `delete_user_account()` tampoco estaba desplegada; su rediseño corresponde a REP-003;
-- existían partes de migraciones posteriores (`device_push_tokens`, `chat-media`, `cleared_at`, `metadata`, índice de señales), confirmando drift del esquema.
+- `profiles_select_policy` demasiado amplia;
+- múltiples funciones `SECURITY DEFINER` expuestas a `anon` y/o `authenticated`;
+- funciones con `search_path=public` o mutable;
+- `citext` instalado en el esquema expuesto `public`;
+- `contact_requests` sin `updated_at`, aunque varias RPC intentaban escribirla;
+- `delete_message_for_me(uuid)` y `delete_user_account()` ausentes pese a aparecer en snapshots/migraciones históricas;
+- partes de migraciones posteriores ya presentes (`device_push_tokens`, `chat-media`, `cleared_at`, `metadata`, índice de señales), confirmando drift.
 
-## 3. Staging aislado
+## 3. Staging reproducido desde el estado desplegado
 
-Se creó `InclusiChat-Staging` como proyecto Supabase separado. El proyecto activo no fue clonado con datos.
+Se creó `InclusiChat-Staging` como proyecto Supabase separado. El baseline técnico de prueba está en:
 
-Se añadió al repositorio:
+`docs/repair/staging/REP-001_STAGING_BASELINE.sql`
 
-- `docs/repair/staging/REP-001_STAGING_BASELINE.sql`
+Ese archivo reproduce deliberadamente el estado desplegado para probar la reparación y está marcado **STAGING ONLY / DO NOT APPLY TO PRODUCTION**.
 
-Ese archivo reproduce de forma intencional la estructura desplegada y sus defectos para probar la reparación. Está marcado **STAGING ONLY / DO NOT APPLY TO PRODUCTION**.
-
-Después de aplicar el baseline se verificó:
+Después del baseline se verificó:
 
 - 47 políticas públicas;
 - 7 políticas con `USING (true)`;
@@ -50,63 +45,75 @@ Después de aplicar el baseline se verificó:
 
 ### `20260823_009_deployed_schema_reconciliation.sql`
 
-Corrige el drift observado:
-
 - añade `contact_requests.updated_at`;
 - mueve `citext` a `extensions`;
 - crea esquema no expuesto `private`;
 - mueve helpers internos y trigger functions fuera de `public`;
 - fija `search_path`;
-- elimina `EXECUTE` anónimo de helpers internos;
-- endurece RPC públicas y sus grants;
+- endurece grants de funciones;
 - crea `delete_message_for_me(uuid)`;
 - elimina políticas universales heredadas;
 - reconstruye RLS de conversaciones, participantes, mensajes, recibos, reacciones, adjuntos y Storage;
-- elimina acceso directo de `anon` a tablas públicas de la aplicación;
-- reconcilia índices faltantes/diferentes.
+- elimina acceso directo de `anon` a tablas públicas de la aplicación.
 
 ### `20260823_010_private_helper_rebinding.sql`
 
-Staging detectó un defecto de runtime después de mover helpers: `can_send_to_conversation()` todavía referenciaba `public.is_conversation_member()`.
+Staging detectó que `private.can_send_to_conversation()` todavía referenciaba al antiguo helper público. La `010`:
 
-La migración `010`:
-
-- rebindea `private.can_send_to_conversation()` a `private.is_conversation_member()`;
+- rebindea el helper al esquema `private`;
 - conserva `search_path=''` y grants mínimos;
 - añade trigger `contact_requests_set_updated_at`.
 
-Este fallo fue detectado antes de tocar producción, que es precisamente el objetivo de staging.
+### `20260824_011_contact_response_invoker.sql`
+
+El Security Advisor mostró que `accept_contact_request` y `reject_contact_request` podían operar con privilegios del caller. La `011`:
+
+- convierte ambas RPC a `SECURITY INVOKER`;
+- elimina `EXECUTE` de `public` y `anon`;
+- mantiene `EXECUTE` solo para `authenticated`.
+
+### `20260824_012_accept_contact_request_via_trigger.sql`
+
+La prueba posterior a `011` encontró una regresión real: `accept_contact_request()` intentaba insertar directamente los dos contactos recíprocos y RLS lo bloqueaba al ejecutarse como caller.
+
+La `012` corrige el diseño:
+
+- `accept_contact_request()` solo cambia la solicitud `pending → accepted`;
+- el trigger privado `private.create_contacts_after_acceptance()` crea los dos contactos recíprocos;
+- la RPC permanece `SECURITY INVOKER`.
+
+Este defecto fue detectado y corregido antes de tocar producción.
 
 ## 5. Migraciones aplicadas en staging
 
-Supabase registra:
+El historial de staging registra, en orden:
 
 1. `rep_001_staging_deployed_baseline`
 2. `deployed_schema_reconciliation`
 3. `private_helper_rebinding`
+4. `contact_response_invoker`
+5. `accept_contact_request_via_trigger`
 
-Las tres se aplicaron correctamente en el entorno aislado.
+Todas aplicaron correctamente.
 
 ## 6. Resultado RLS después de la reparación
 
-Después de `009` + `010`:
+Después de `009–012`:
 
-- políticas públicas: 36;
 - políticas públicas con `USING (true)`: **0**;
 - políticas públicas con `WITH CHECK (true)`: **0**;
-- helpers internos `private.*`: no ejecutables por `anon`;
-- `anon` no tiene acceso directo a `profiles`;
-- `check_username_available(text)` continúa disponible para el flujo pre-registro de la app.
+- helpers `private.*` no son ejecutables por `anon`;
+- `anon` no tiene lectura directa de tablas de usuario;
+- `accept_contact_request` y `reject_contact_request` son `SECURITY INVOKER`;
+- las RPC que continúan `SECURITY DEFINER` tienen `search_path=''` y grants explícitos.
 
-## 7. Pruebas A/B/C ejecutadas
+## 7. Pruebas A/B/C
 
 Identidades ficticias:
 
-- A = usuario participante/emisor;
-- B = usuario participante/receptor;
-- C = usuario no participante.
-
-No son usuarios reales y fueron eliminados al terminar las pruebas.
+- A = participante/emisor;
+- B = participante/receptor;
+- C = no participante.
 
 ### Conversaciones y mensajes
 
@@ -114,108 +121,90 @@ No son usuarios reales y fueron eliminados al terminar las pruebas.
 |---|---|
 | A crea conversación directa A–B | PASS |
 | A envía mensaje con `sender_id=A` | PASS |
-| A intenta enviar usando `sender_id=B` | PASS: rechazado `42501` por RLS |
-| B consulta el mensaje de A | PASS: visible |
-| C consulta conversación A–B | PASS: 0 filas |
-| C consulta mensajes A–B | PASS: 0 filas |
+| A intenta enviar usando `sender_id=B` | PASS: rechazado `42501` |
+| B lee el mensaje de A | PASS |
+| C ve conversación A–B | PASS: 0 filas |
+| C ve mensajes A–B | PASS: 0 filas |
 | C intenta insertar en A–B | PASS: rechazado `42501` |
 
 ### Recibos
 
 | Prueba | Resultado |
 |---|---|
-| B registra `read` para mensaje enviado por A | PASS |
+| B registra `read` para mensaje de A | PASS |
 | A intenta crear recibo con `user_id=B` | PASS: rechazado `42501` |
+| C consulta recibos A–B | PASS: 0 filas |
 
 ### Storage privado
 
-Se insertó un objeto ficticio en `chat-media` bajo el path de la conversación A–B.
+| Prueba | Resultado |
+|---|---|
+| A ve el objeto A–B | PASS: 1 fila |
+| B ve el objeto A–B | PASS: 1 fila |
+| C intenta leerlo | PASS: 0 filas |
+| C intenta insertar en el path A–B | PASS: rechazado `42501` |
+
+### Contactos
 
 | Prueba | Resultado |
 |---|---|
-| B, participante, puede leer el objeto | PASS: 1 fila |
-| C, no participante, intenta leerlo | PASS: 0 filas |
-| C intenta insertar dentro del path A–B | PASS: rechazado `42501` |
-
-### RPC de contactos
-
-| Prueba | Resultado |
-|---|---|
-| A envía solicitud a C | PASS |
-| A intenta aceptar su propia solicitud en nombre de C | PASS: RPC devuelve `false` |
-| C acepta la solicitud | PASS: RPC devuelve `true` |
+| A envía solicitud | PASS |
+| receptor rechaza como usuario normal | PASS |
+| receptor acepta como usuario normal tras `012` | PASS |
 | `updated_at` y `responded_at` se actualizan | PASS |
+| trigger privado crea exactamente 2 contactos recíprocos | PASS |
 
-### Eliminación por usuario
-
-| Prueba | Resultado |
-|---|---|
-| B ejecuta `delete_message_for_me()` | PASS: `true` |
-| `metadata.deleted_for` contiene solo a B | PASS |
-| A continúa viendo el mensaje compartido | PASS: 1 fila |
-| B ejecuta `clear_conversation_for_me()` | PASS |
-| `cleared_at` cambia solo para B | PASS |
-
-### Superficie anónima
+### Eliminación privada de mensaje
 
 | Prueba | Resultado |
 |---|---|
-| `anon` ejecuta `check_username_available()` | PASS |
-| `anon` intenta `SELECT` directo sobre `profiles` | PASS: `permission denied` |
+| B ejecuta `delete_message_for_me()` | PASS |
+| `metadata.deleted_for` contiene a B | PASS |
 
-## 8. Idempotencia y concurrencia
+## 8. Idempotencia de conversaciones directas
 
-Dos llamadas independientes consecutivas a `create_direct_conversation()` para el mismo par A–C devolvieron exactamente el mismo `conversation_id`.
+La función versionada `create_direct_conversation()` usa `pg_advisory_xact_lock(hashtextextended(pair_key,0))` y el esquema tiene unicidad sobre `direct_pair_key`.
 
-La función usa `pg_advisory_xact_lock` y existe unicidad de `direct_pair_key`, por lo que la protección estructural contra duplicados está presente.
+En staging se comprobó además que el par de prueba A–B tiene **una sola conversación persistida** para su `direct_pair_key`.
 
-**Limitación:** no se ejecutó aún una carrera verdaderamente simultánea desde dos clientes físicos/sesiones externas. Esa prueba queda obligatoriamente dentro de REP-010 de integración/E2E. No se declara esa prueba como realizada.
+**Limitación:** la integración bloqueó una repetición adicional de la RPC bajo rol JWT simulado y no se ejecutó una carrera verdaderamente simultánea desde dos clientes externos. La prueba de concurrencia real queda en REP-010. La protección estructural contra duplicados sí está presente.
 
-## 9. Advisors posteriores
+## 9. Security Advisor posterior
 
-### Security Advisor
+Los avisos originales sobre políticas universales, helpers internos y `search_path` fueron eliminados.
 
-Los avisos peligrosos originales de helpers internos, `search_path` mutable y `citext` en `public` desaparecieron.
+Después de `011/012`, desaparecieron también los avisos para:
 
-Permanecen avisos `SECURITY DEFINER` para RPC públicas que son intencionalmente endpoints de la aplicación:
+- `accept_contact_request`;
+- `reject_contact_request`.
 
-- `check_username_available`;
+Permanecen avisos sobre RPC públicas `SECURITY DEFINER` que requieren revisión explícita como superficie API:
+
+- `check_username_available` — disponible también para `anon`, devuelve solo disponibilidad;
 - `search_profiles`;
 - `send_contact_request`;
-- `accept_contact_request`;
-- `reject_contact_request`;
 - `create_direct_conversation`;
 - `delete_message_for_me`.
 
-Se mantienen porque requieren una operación controlada que no puede delegarse a acceso directo de tablas. Todas tienen `search_path=''`, grants explícitos y validación de identidad/alcance. `check_username_available` es la única habilitada para `anon`, porque el cliente la necesita antes de crear la cuenta y solo devuelve un booleano de disponibilidad.
+No se consideran automáticamente vulnerabilidades cerradas: deben conservar validaciones internas, `search_path=''` y grants mínimos, y seguir bajo pruebas de integración.
 
-También permanece `Leaked Password Protection Disabled`. La conexión Supabase disponible no expone una acción para cambiar esa configuración de Auth. Debe habilitarse antes del gate final de producción y volver a ejecutar el Advisor.
+## 10. Performance Advisor
 
-### Performance Advisor
+Se registraron advertencias no bloqueantes de seguridad:
 
-Se detectaron optimizaciones no bloqueantes de seguridad:
-
-- varias RLS pueden envolver `auth.uid()` como `(select auth.uid())` para evitar reevaluación por fila;
+- varias RLS pueden optimizar `auth.uid()` a `(select auth.uid())`;
 - faltan índices de FK en `conversations.created_by`, `message_reactions.user_id` y `messages.reply_to_message_id`;
-- los avisos `unused_index` de staging no son concluyentes porque el entorno tiene muy poco tráfico.
+- los avisos de índices no usados en staging no son concluyentes por el bajo tráfico del entorno.
 
-Estas optimizaciones quedan registradas para la fase P2/optimización y no justifican modificar más REP-001 sin medir impacto.
+Estas mejoras quedan para la fase de rendimiento y no se mezclan con el cierre P0 de REP-001.
 
-## 10. Hallazgo de reproducibilidad para código libre
+## 11. Reproducibilidad para código libre
 
-El repositorio no contiene una migración inicial completa capaz de construir InclusiChat desde una base Supabase vacía; `001–008` son incrementales y los `supabase_schema.sql` históricos están explícitamente declarados como snapshots forenses que no deben aplicarse.
+Las migraciones históricas no construyen InclusiChat desde una base Supabase completamente vacía. Para un proyecto de código libre esto debe corregirse antes de `v1.6.0`.
 
-Para un proyecto de código libre esto es un blocker de reproducibilidad: un colaborador nuevo debe poder levantar la base desde cero sin copiar un esquema de producción.
+Después de cerrar los P0 de base de datos se debe generar y probar un baseline/squash seguro y reproducible para instalaciones nuevas dentro de REP-009/REP-010.
 
-**Acción obligatoria antes de v1.6.0:** después de cerrar los P0 de base de datos (especialmente REP-003 y REP-004), generar un baseline/squash seguro y reproducible para instalaciones nuevas y probarlo desde un proyecto Supabase vacío dentro del flujo de REP-009/REP-010.
-
-El archivo `REP-001_STAGING_BASELINE.sql` NO cumple esa función porque reproduce deliberadamente el estado inseguro previo solo para pruebas.
-
-## 11. Limpieza de pruebas
-
-Los usuarios ficticios A/B/C y las filas normales asociadas fueron eliminados de staging.
-
-Supabase impide eliminar objetos de `storage.objects` directamente por SQL. El objeto ficticio usado para la prueba de Storage permanece en staging y no contiene información real. Debe eliminarse mediante Storage API o al retirar el proyecto staging; no se desactivó ni eludió la protección `storage.protect_delete()`.
+`REP-001_STAGING_BASELINE.sql` no es ese baseline: reproduce deliberadamente el estado inseguro previo para pruebas.
 
 ## 12. Rollback
 
@@ -223,20 +212,22 @@ Ver:
 
 `docs/repair/rollback/REP-001_ROLLBACK.md`
 
-Ninguna promoción a producción debe ocurrir sin backup verificable y snapshot inmediatamente anterior.
+La promoción requiere backup verificable y snapshot inmediatamente anterior.
 
-## 13. Veredicto REP-001
+## 13. Veredicto
 
 ### Staging
 
 `CORREGIDO — VERIFICADO`
 
-Los criterios de aislamiento RLS, `sender_id`, recibos, Storage, RPC y eliminación por usuario pasaron en staging.
+Los criterios de aislamiento RLS, `sender_id`, recibos, Storage, RPC de contacto y borrado privado de mensaje pasaron.
 
 ### Producción
 
 `NO MODIFICADA — PROMOCIÓN PENDIENTE`
 
-Las políticas inseguras siguen existiendo en producción hasta que `009` y `010` sean promovidas de forma controlada.
+Si se autoriza posteriormente, la secuencia validada es estrictamente:
 
-**Siguiente decisión:** verificar backup/snapshot de producción y obtener autorización explícita antes de ejecutar cualquier DDL allí.
+`009 → 010 → 011 → 012`
+
+No se debe promover una secuencia parcial.
