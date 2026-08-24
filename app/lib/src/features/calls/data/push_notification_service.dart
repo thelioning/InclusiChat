@@ -20,9 +20,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   if (message.data['event'] != 'incoming_call') return;
 
-  // Fail closed when the device no longer has an authenticated push owner.
-  // This also protects against a call push that was already in transit while
-  // the user was signing out.
   try {
     final ownerUserId = await _pushSecureStorage.read(key: _pushOwnerKey);
     if (ownerUserId == null || ownerUserId.isEmpty) return;
@@ -81,10 +78,6 @@ class PushNotificationService {
     final persistedOwner = await _pushSecureStorage.read(key: _pushOwnerKey);
     final inMemoryOwner = _initializedUserId;
 
-    // A process restart or an unexpected account switch must never reuse the
-    // same FCM registration as another account. The old backend row may be
-    // impossible to delete after the auth session changes, so invalidate the
-    // Firebase token and force a fresh registration for the new user.
     if ((persistedOwner != null && persistedOwner != userId) ||
         (inMemoryOwner != null && inMemoryOwner != userId)) {
       await reset();
@@ -208,8 +201,6 @@ class PushNotificationService {
     final conversationId = data['conversation_id'];
     if (callId == null || callId.isEmpty || conversationId == null) return;
 
-    // A notification can be opened after the caller has already hung up.
-    // Verify the persisted signal before presenting a stale call screen.
     try {
       final action = await CallService().getCallSignalState(
         conversationId: conversationId,
@@ -231,9 +222,6 @@ class PushNotificationService {
     );
   }
 
-  /// Detaches this physical device from the current account before Supabase
-  /// destroys the auth session. Other devices belonging to the same user are
-  /// untouched because removal is scoped to this exact FCM token.
   static Future<void> prepareForSignOut() async {
     final user = Supabase.instance.client.auth.currentUser;
     final persistedToken = await _pushSecureStorage.read(key: _pushTokenKey);
@@ -247,13 +235,11 @@ class PushNotificationService {
       }
     }
 
-    // Clear ownership first so a queued background push fails closed even if
-    // the network cleanup below has not finished yet.
     await _clearPersistedOwnership();
 
     var backendDetached = user == null || token == null || token.isEmpty;
     if (!backendDetached) {
-      backendDetached = await _deleteBackendToken(token!, user.id);
+      backendDetached = await _deleteBackendToken(token!, user!.id);
     }
 
     await reset();
@@ -266,11 +252,10 @@ class PushNotificationService {
       debugPrint('FCM token invalidation during logout failed: $error\n$stack');
     }
 
-    // At least one remote protection must succeed. If neither backend removal
-    // nor Firebase invalidation succeeded, do not silently complete logout and
-    // leave a known stale push route behind.
     if (!backendDetached && !firebaseInvalidated) {
-      throw StateError('No se pudo desvincular este dispositivo de las notificaciones.');
+      throw StateError(
+        'No se pudo desvincular este dispositivo de las notificaciones.',
+      );
     }
   }
 
