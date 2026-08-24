@@ -239,7 +239,7 @@ class PushNotificationService {
 
     var backendDetached = user == null || token == null || token.isEmpty;
     if (!backendDetached) {
-      backendDetached = await _deleteBackendToken(token!, user!.id);
+      backendDetached = await _deleteBackendToken(token, user.id);
     }
 
     await reset();
