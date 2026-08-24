@@ -1,5 +1,8 @@
 import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../calls/data/push_notification_service.dart';
 
 class AuthService {
   AuthService({SupabaseClient? client})
@@ -93,7 +96,10 @@ class AuthService {
     );
   }
 
-  Future<void> signOut() => _client.auth.signOut();
+  Future<void> signOut() async {
+    await PushNotificationService.unregisterCurrentUser(client: _client);
+    await _client.auth.signOut();
+  }
 
   Future<void> resendConfirmation({required String email}) async {
     await _client.auth.resend(
