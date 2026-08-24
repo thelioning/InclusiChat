@@ -56,4 +56,28 @@ void main() {
     expect(nativeService, contains('CallEventActionCallAccept'));
     expect(nativeService, contains('CallEventActionCallDecline'));
   });
+
+  test('logout detaches the device token from the previous account', () {
+    final pushService = File(
+      'lib/src/features/calls/data/push_notification_service.dart',
+    ).readAsStringSync();
+    final authService = File(
+      'lib/src/features/auth/data/auth_service.dart',
+    ).readAsStringSync();
+    final function = File(
+      '../supabase/functions/send-call-notification/index.ts',
+    ).readAsStringSync();
+
+    expect(pushService, contains('prepareForSignOut'));
+    expect(pushService, contains(".from('device_push_tokens')"));
+    expect(pushService, contains(".eq('token', token)"));
+    expect(pushService, contains(".eq('user_id', userId)"));
+    expect(pushService, contains('_messaging.deleteToken()'));
+    expect(pushService, contains('_initializedUserId'));
+    expect(pushService, contains('_pushOwnerKey'));
+    expect(pushService, contains("message.data['receiver_id']"));
+    expect(authService,
+        contains('PushNotificationService.prepareForSignOut()'));
+    expect(function, contains('receiver_id: body.receiver_id'));
+  });
 }
