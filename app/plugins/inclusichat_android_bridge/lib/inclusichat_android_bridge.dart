@@ -1,1 +1,1 @@
-library inclusichat_android_bridge;
+// Android-only plugin bridge for InclusiChat.
