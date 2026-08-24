@@ -104,6 +104,7 @@ Deno.serve(async (request) => {
     caller_id: callerId,
     caller_name: callerName,
     caller_avatar: caller?.avatar_url ?? "",
+    receiver_id: body.receiver_id,
     call_type: body.call_type,
   };
   let delivered = 0;
