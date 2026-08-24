@@ -91,7 +91,10 @@ Antes de modificar el proyecto, lee completamente:
 2. `.codex/repair/REPAIR_CHECKLIST.md`
 3. `.codex/repair/REPAIR_REPORT_TEMPLATE.md`
 4. `docs/repair/REPAIR_ROADMAP.md`
-5. `docs/release/PRODUCTION_RELEASE_PLAN.md`
+5. `docs/repair/REPAIR_STATUS.md`
+6. `docs/release/PRODUCTION_RELEASE_PLAN.md`
+
+Si alguno de los tres archivos `.codex/repair/*` no está versionado/disponible, no inventar su contenido. Registrar la ausencia y seguir las reglas explícitas de este `AGENTS.md`, `REPAIR_ROADMAP.md` y `REPAIR_STATUS.md` hasta que esos archivos sean restaurados.
 
 La reparación debe basarse en hallazgos `AUD-XXX` y/o puntos `REP-XXX` de la ruta vigente.
 
@@ -153,16 +156,19 @@ No declarar el proyecto listo para producción solo porque los archivos fueron m
 
 ## 7. Ruta obligatoria hacia producción
 
-`docs/repair/REPAIR_ROADMAP.md` y `docs/release/PRODUCTION_RELEASE_PLAN.md` forman parte del contrato técnico del repositorio.
+`docs/repair/REPAIR_ROADMAP.md`, `docs/repair/REPAIR_STATUS.md` y `docs/release/PRODUCTION_RELEASE_PLAN.md` forman parte del contrato técnico del repositorio.
 
-Todo desarrollador, agente o proceso automatizado que vaya a reparar, ampliar o preparar una release debe leer ambos documentos antes de comenzar.
+Todo desarrollador, agente o proceso automatizado que vaya a reparar, ampliar o preparar una release debe leer los tres documentos antes de comenzar.
 
 ### Reglas obligatorias
 
 - Las reparaciones deben indicar qué `REP-XXX` cierran o qué riesgo documentado atienden.
+- `REPAIR_STATUS.md` debe actualizarse cuando un punto cambie de estado, aparezca un blocker nuevo o se modifique el siguiente paso obligatorio.
 - No agregar funciones no esenciales mientras exista un P0 abierto, salvo que el cambio sea necesario para cerrarlo.
 - Un P0/P1 no se considera cerrado con pruebas puramente estáticas cuando el riesgo requiere validación de comportamiento.
 - Cambios en Supabase deben existir como migraciones versionadas y probarse primero en staging.
+- `VERIFICADO EN STAGING` nunca autoriza por sí solo una escritura en producción.
+- Toda promoción de DDL a producción requiere backup verificable, snapshot previo y autorización explícita del propietario.
 - Cambios de sesión, push, contactos, Storage o llamadas requieren pruebas con más de una identidad/dispositivo cuando corresponda.
 - Si una función no está completamente implementada para producción, debe quedar oculta o deshabilitada en el build release.
 - No afirmar E2EE mientras el servidor pueda leer el contenido.
