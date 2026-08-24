@@ -97,14 +97,16 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await PushNotificationService.prepareForSignOut();
     try {
+      await PushNotificationService.prepareForSignOut();
       await _client.auth.signOut();
     } catch (_) {
-      // If Supabase fails to destroy the session, restore push registration
-      // for the still-authenticated account instead of leaving it half logged
-      // in without notifications.
-      await PushNotificationService.initializeForCurrentUser();
+      // Any cleanup failure happens while the Supabase session may still be
+      // alive. Re-register push for that account instead of leaving a signed-in
+      // user with the local push ownership already cleared.
+      if (_client.auth.currentUser != null) {
+        await PushNotificationService.initializeForCurrentUser();
+      }
       rethrow;
     }
   }
