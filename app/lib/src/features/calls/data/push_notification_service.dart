@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'background_supabase.dart';
 import 'call_manager.dart';
 import 'call_service.dart';
 import 'native_call_notification_service.dart';
@@ -36,6 +37,44 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 
   await showNativeIncomingCall(message.data);
+  await _watchBackgroundCallState(message.data);
+}
+
+@pragma('vm:entry-point')
+Future<void> _watchBackgroundCallState(Map<String, dynamic> data) async {
+  final callId = data['call_id']?.toString();
+  final conversationId = data['conversation_id']?.toString();
+  if (callId == null ||
+      callId.isEmpty ||
+      conversationId == null ||
+      conversationId.isEmpty) {
+    return;
+  }
+
+  if (!await ensureBackgroundSupabase()) return;
+
+  // Firebase background work should stay short. The native CallKit timeout
+  // remains the final 35-second safety net; this watcher covers the period in
+  // which the remote caller is most likely to cancel while Android is locked.
+  final deadline = DateTime.now().add(const Duration(seconds: 28));
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      final action = await CallService().getCallSignalState(
+        conversationId: conversationId,
+        callId: callId,
+      );
+      if (action == 'end' || action == 'reject') {
+        await NativeCallNotificationService.endFromRemote(callId);
+        return;
+      }
+      if (action == 'accept') {
+        return;
+      }
+    } catch (error, stack) {
+      debugPrint('Background call state check failed: $error\n$stack');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+  }
 }
 
 class PushNotificationService {
