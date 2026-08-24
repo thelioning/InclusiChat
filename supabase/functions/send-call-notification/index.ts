@@ -101,6 +101,7 @@ Deno.serve(async (request) => {
     event: "incoming_call",
     call_id: body.call_id,
     conversation_id: body.conversation_id,
+    receiver_id: body.receiver_id,
     caller_id: callerId,
     caller_name: callerName,
     caller_avatar: caller?.avatar_url ?? "",
