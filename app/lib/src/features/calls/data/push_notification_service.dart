@@ -26,43 +26,70 @@ class PushNotificationService {
   static StreamSubscription<RemoteMessage>? _foregroundSubscription;
   static StreamSubscription<RemoteMessage>? _openedSubscription;
   static bool _initialized = false;
+  static String? _initializedUserId;
+  static String? _registeredToken;
 
   static Future<void> initializeForCurrentUser() async {
-    if (_initialized) return;
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-    _initialized = true;
-
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-    await NativeCallNotificationService.initialize();
-
-    final token = await _messaging.getToken();
-    if (token != null && token.isNotEmpty) {
-      await _saveToken(token, user.id);
+    if (user == null) {
+      if (_initialized) await reset();
+      return;
     }
 
-    _tokenSubscription = _messaging.onTokenRefresh.listen(
-      (newToken) => _saveToken(newToken, user.id),
-      onError: (Object error, StackTrace stack) {
-        debugPrint('FCM token refresh failed: $error');
-      },
-    );
-    _foregroundSubscription = FirebaseMessaging.onMessage.listen(_openCall);
-    _openedSubscription =
-        FirebaseMessaging.onMessageOpenedApp.listen(_openCall);
+    if (_initialized && _initializedUserId == user.id) return;
+    if (_initialized) await reset();
 
-    final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      _openCall(initialMessage);
+    _initialized = true;
+    _initializedUserId = user.id;
+
+    try {
+      await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      await NativeCallNotificationService.initialize();
+
+      final token = await _messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _saveToken(token, user.id);
+      }
+
+      _tokenSubscription = _messaging.onTokenRefresh.listen(
+        (newToken) async {
+          final currentUser = Supabase.instance.client.auth.currentUser;
+          if (currentUser == null || currentUser.id != _initializedUserId) {
+            return;
+          }
+          await _saveToken(newToken, currentUser.id);
+        },
+        onError: (Object error, StackTrace stack) {
+          debugPrint('FCM token refresh failed: $error');
+        },
+      );
+      _foregroundSubscription = FirebaseMessaging.onMessage.listen(_openCall);
+      _openedSubscription =
+          FirebaseMessaging.onMessageOpenedApp.listen(_openCall);
+
+      final initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        await _openCall(initialMessage);
+      }
+    } catch (error, stack) {
+      debugPrint('FCM initialization failed: $error\n$stack');
+      await reset();
     }
   }
 
   static Future<void> _saveToken(String token, String userId) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null ||
+        currentUser.id != userId ||
+        _initializedUserId != userId) {
+      return;
+    }
+
     try {
       await Supabase.instance.client.from('device_push_tokens').upsert({
         'token': token,
@@ -70,14 +97,66 @@ class PushNotificationService {
         'platform': Platform.isAndroid ? 'android' : 'ios',
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'token');
+      _registeredToken = token;
     } catch (error, stack) {
       debugPrint('FCM token registration failed: $error\n$stack');
+    }
+  }
+
+  static Future<void> unregisterCurrentUser({SupabaseClient? client}) async {
+    final supabase = client ?? Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id ?? _initializedUserId;
+
+    String? token = _registeredToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = await _messaging.getToken();
+      } catch (error, stack) {
+        debugPrint('FCM token lookup during logout failed: $error\n$stack');
+      }
+    }
+
+    if (userId != null && token != null && token.isNotEmpty) {
+      try {
+        await supabase
+            .from('device_push_tokens')
+            .delete()
+            .eq('token', token)
+            .eq('user_id', userId);
+      } catch (error, stack) {
+        debugPrint('FCM token unregister failed: $error\n$stack');
+      }
+    }
+
+    // Invalidating the Firebase token prevents a stale database row from
+    // continuing to receive notifications if the network cleanup above fails.
+    // A later login obtains a fresh token and registers it for that account.
+    try {
+      await _messaging.deleteToken();
+    } catch (error, stack) {
+      debugPrint('FCM token invalidation failed: $error\n$stack');
+    }
+
+    try {
+      await reset();
+    } catch (error, stack) {
+      debugPrint('FCM listener reset during logout failed: $error\n$stack');
     }
   }
 
   static Future<void> _openCall(RemoteMessage message) async {
     final data = message.data;
     if (data['event'] != 'incoming_call') return;
+
+    final receiverId = data['receiver_id']?.toString();
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (receiverId != null &&
+        receiverId.isNotEmpty &&
+        receiverId != currentUserId) {
+      debugPrint('Ignoring FCM call intended for a different user.');
+      return;
+    }
+
     final callId = data['call_id'];
     final conversationId = data['conversation_id'];
     if (callId == null || callId.isEmpty || conversationId == null) return;
@@ -116,6 +195,8 @@ class PushNotificationService {
     _foregroundSubscription = null;
     _openedSubscription = null;
     await NativeCallNotificationService.reset();
+    _registeredToken = null;
+    _initializedUserId = null;
     _initialized = false;
   }
 }
