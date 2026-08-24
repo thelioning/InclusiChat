@@ -16,6 +16,22 @@ flutter run --dart-define-from-file=config/dev.json
 `config/dev.json` está excluido de Git. Nunca agregues una clave `service_role`
 o `sb_secret_` a una aplicación cliente.
 
+## Firma Android de producción
+
+Los builds `release` no utilizan la clave de depuración. Copia
+`android/key.properties.example` como `android/key.properties`, completa la
+ruta y credenciales de una clave de publicación custodiada fuera del
+repositorio y conserva un backup cifrado. Si falta esa configuración, el build
+release falla intencionalmente para impedir distribuir un APK inseguro.
+
+## Control automático de calidad
+
+Cada pull request y cada cambio enviado a `main` verifica el formato, ejecuta
+el análisis estático, todas las pruebas Flutter y una compilación Android debug
+mediante `.github/workflows/flutter-ci.yml`. Las migraciones de Supabase deben
+aplicarse primero a un proyecto aislado de staging y validarse con dos cuentas
+sin privilegios; el repositorio no modifica automáticamente producción.
+
 ## Identidad visual
 
 - Logo oficial HD: `assets/branding/inclusichat-logo-hd.png`.

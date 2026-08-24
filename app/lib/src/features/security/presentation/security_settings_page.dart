@@ -31,12 +31,14 @@ class SecuritySettingsPage extends StatelessWidget {
                     children: [
                       Text(
                         'Espacio Protegido',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 16),
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Tus datos y conexiones están aislados bajo protocolos de seguridad y Row Level Security.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        'El acceso a tus conversaciones se limita mediante autenticación y políticas de membresía en Supabase.',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -47,20 +49,24 @@ class SecuritySettingsPage extends StatelessWidget {
           const SizedBox(height: 20),
           const ListTile(
             leading: Icon(Icons.lock_clock_outlined, color: AppColors.primary),
-            title: Text('Mensajería efímera'),
-            subtitle: Text('Los mensajes no persisten indefinidamente en el servidor.'),
+            title: Text('Persistencia de mensajes'),
+            subtitle: Text(
+                'Los mensajes permanecen guardados hasta que se eliminen explícitamente.'),
           ),
           const Divider(height: 16),
           const ListTile(
-            leading: Icon(Icons.phone_locked_outlined, color: AppColors.primary),
+            leading:
+                Icon(Icons.phone_locked_outlined, color: AppColors.primary),
             title: Text('Privacidad de número'),
-            subtitle: Text('Tu número de teléfono nunca es visible para otros contactos.'),
+            subtitle: Text(
+                'Tu número de teléfono nunca es visible para otros contactos.'),
           ),
           const Divider(height: 16),
           const ListTile(
             leading: Icon(Icons.devices_rounded, color: AppColors.primary),
             title: Text('Sesión activa'),
-            subtitle: Text('Conexión protegida vía token seguro con Supabase Auth.'),
+            subtitle:
+                Text('Conexión protegida vía token seguro con Supabase Auth.'),
           ),
           const SizedBox(height: 32),
           OutlinedButton.icon(
@@ -74,11 +80,15 @@ class SecuritySettingsPage extends StatelessWidget {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Cerrar sesión'),
-                  content: const Text('¿Deseas cerrar tu sesión en este dispositivo?'),
+                  content: const Text(
+                      '¿Deseas cerrar tu sesión en este dispositivo?'),
                   actions: [
-                    TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+                    TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Cancelar')),
                     FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error),
                       onPressed: () => Navigator.of(ctx).pop(true),
                       child: const Text('Cerrar sesión'),
                     ),
@@ -115,7 +125,8 @@ class SecuritySettingsPage extends StatelessWidget {
                       child: const Text('Cancelar'),
                     ),
                     FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error),
                       onPressed: () => Navigator.of(ctx).pop(true),
                       child: const Text('Eliminar mi cuenta'),
                     ),
@@ -129,7 +140,8 @@ class SecuritySettingsPage extends StatelessWidget {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Tu cuenta y datos han sido eliminados correctamente.'),
+                        content: Text(
+                            'Tu cuenta y datos han sido eliminados correctamente.'),
                         backgroundColor: AppColors.surfaceRaised,
                       ),
                     );
@@ -138,7 +150,8 @@ class SecuritySettingsPage extends StatelessWidget {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('No se pudo eliminar la cuenta. Inténtalo de nuevo.'),
+                        content: Text(
+                            'No se pudo eliminar la cuenta. Inténtalo de nuevo.'),
                         backgroundColor: AppColors.error,
                       ),
                     );
@@ -146,7 +159,8 @@ class SecuritySettingsPage extends StatelessWidget {
                 }
               }
             },
-            icon: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 18),
+            icon: const Icon(Icons.delete_forever_rounded,
+                color: AppColors.error, size: 18),
             label: const Text(
               'Eliminar mi cuenta y borrar mis datos',
               style: TextStyle(color: AppColors.error, fontSize: 13),

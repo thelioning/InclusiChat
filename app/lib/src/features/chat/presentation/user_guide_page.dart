@@ -41,7 +41,8 @@ class UserGuidePage extends StatelessWidget {
                 SizedBox(height: 8),
                 Text(
                   'Mensajería privada e inclusiva diseñada para que converses con total libertad y sin exponer tus datos personales.',
-                  style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                  style:
+                      TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
                 ),
               ],
             ),
@@ -77,7 +78,7 @@ class UserGuidePage extends StatelessWidget {
             iconColor: Colors.amberAccent,
             title: '3. Modo Camuflaje y PIN Personalizable',
             description:
-                'Si alguien te pide revisar tu teléfono, pulsa el icono de camuflaje en la barra superior. La app se disfrazará al instante de Calculadora real.\n\n• PIN inicial de fábrica: 1234 seguido de "="\n• Personaliza tu clave: Ve a Ajustes > Privacidad y camuflaje para elegir un PIN propio de 4 dígitos que solo tú conozcas.',
+                'Primero configura un PIN personal en Ajustes > Privacidad y camuflaje. Después podrás usar el icono de camuflaje para mostrar la calculadora. No existe un PIN de fábrica y el modo permanece desactivado hasta que establezcas uno de 4 a 6 dígitos.',
           ),
           const SizedBox(height: 12),
 
@@ -86,7 +87,7 @@ class UserGuidePage extends StatelessWidget {
             iconColor: Colors.greenAccent,
             title: '4. Llamadas y Videollamadas',
             description:
-                'Dentro de cualquier chat, pulsa el icono de teléfono o cámara para iniciar una llamada de voz o videollamada cifrada de extremo a extremo.',
+                'Los iconos de teléfono y cámara abren una vista previa experimental de señalización. La versión actual todavía no transporta audio o video.',
           ),
           const SizedBox(height: 12),
 
@@ -105,7 +106,8 @@ class UserGuidePage extends StatelessWidget {
             label: const Text('¡Entendido, a chatear!'),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
           ),
           const SizedBox(height: 16),

@@ -15,10 +15,12 @@ class QuickShareContactPickerPage extends StatefulWidget {
   final String initialCaption;
 
   @override
-  State<QuickShareContactPickerPage> createState() => _QuickShareContactPickerPageState();
+  State<QuickShareContactPickerPage> createState() =>
+      _QuickShareContactPickerPageState();
 }
 
-class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPage> {
+class _QuickShareContactPickerPageState
+    extends State<QuickShareContactPickerPage> {
   final _chatService = ChatService();
   late final TextEditingController _captionController;
   final _searchController = TextEditingController();
@@ -119,13 +121,16 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
       debugPrint('Error sending photo: $e\n$stack');
       if (mounted) {
         setState(() => _sending = false);
-        final cleanMsg = e.toString()
+        final cleanMsg = e
+            .toString()
             .replaceAll('Exception:', '')
             .replaceAll('PostgrestException', '')
             .trim();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(cleanMsg.isNotEmpty ? cleanMsg : 'No se pudo enviar la foto. Intenta de nuevo.'),
+            content: Text(cleanMsg.isNotEmpty
+                ? cleanMsg
+                : 'No se pudo enviar la foto. Intenta de nuevo.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -141,7 +146,8 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
       return c.title.toLowerCase().contains(query);
     }).toList();
 
-    final knownPartnerNames = _conversations.map((c) => c.title.toLowerCase()).toSet();
+    final knownPartnerNames =
+        _conversations.map((c) => c.title.toLowerCase()).toSet();
     final filteredContacts = _contacts.where((c) {
       if (query.isEmpty) return true;
       final name = c.displayName.toLowerCase();
@@ -171,10 +177,12 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
               onChanged: (val) => setState(() => _searchQuery = val),
               decoration: InputDecoration(
                 hintText: 'Buscar contacto o chat...',
-                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.textSecondary),
                 filled: true,
                 fillColor: AppColors.surfaceRaised,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
@@ -203,32 +211,39 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
                           ),
                         ),
                         ...filteredConversations.map((conv) {
-                          final isSelected = _selectedConversationIds.contains(conv.id);
+                          final isSelected =
+                              _selectedConversationIds.contains(conv.id);
                           return ListTile(
                             onTap: () => _toggleConversation(conv.id),
                             leading: CircleAvatar(
                               backgroundColor: AppColors.surfaceRaised,
-                              backgroundImage: conv.avatarUrl != null && conv.avatarUrl!.isNotEmpty
+                              backgroundImage: conv.avatarUrl != null &&
+                                      conv.avatarUrl!.isNotEmpty
                                   ? NetworkImage(conv.avatarUrl!)
                                   : null,
-                              child: conv.avatarUrl == null || conv.avatarUrl!.isEmpty
+                              child: conv.avatarUrl == null ||
+                                      conv.avatarUrl!.isEmpty
                                   ? Text(
                                       conv.title.characters.first.toUpperCase(),
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
                                     )
                                   : null,
                             ),
                             title: Text(
                               conv.title,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             subtitle: Text(
                               conv.lastMessage ?? 'Conversación activa',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary, fontSize: 13),
                             ),
-                            trailing: _SelectionCheckCircle(isSelected: isSelected),
+                            trailing:
+                                _SelectionCheckCircle(isSelected: isSelected),
                           );
                         }),
                       ],
@@ -245,36 +260,46 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
                           ),
                         ),
                         ...filteredContacts.map((contact) {
-                          final isSelected = _selectedContactUserIds.contains(contact.id);
+                          final isSelected =
+                              _selectedContactUserIds.contains(contact.id);
                           return ListTile(
                             onTap: () => _toggleContact(contact.id),
                             leading: CircleAvatar(
                               backgroundColor: AppColors.surfaceRaised,
-                              backgroundImage: contact.avatarUrl != null && contact.avatarUrl!.isNotEmpty
+                              backgroundImage: contact.avatarUrl != null &&
+                                      contact.avatarUrl!.isNotEmpty
                                   ? NetworkImage(contact.avatarUrl!)
                                   : null,
-                              child: contact.avatarUrl == null || contact.avatarUrl!.isEmpty
+                              child: contact.avatarUrl == null ||
+                                      contact.avatarUrl!.isEmpty
                                   ? Text(
-                                      contact.displayName.characters.first.toUpperCase(),
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                      contact.displayName.characters.first
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
                                     )
                                   : null,
                             ),
                             title: Text(
                               contact.displayName,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             subtitle: contact.username != null
                                 ? Text(
                                     '@${contact.username}',
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                    style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 13),
                                   )
                                 : null,
-                            trailing: _SelectionCheckCircle(isSelected: isSelected),
+                            trailing:
+                                _SelectionCheckCircle(isSelected: isSelected),
                           );
                         }),
                       ],
-                      if (filteredConversations.isEmpty && filteredContacts.isEmpty)
+                      if (filteredConversations.isEmpty &&
+                          filteredContacts.isEmpty)
                         const Padding(
                           padding: EdgeInsets.all(32),
                           child: Center(
@@ -324,7 +349,8 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
                     hintText: 'Añade un comentario...',
-                    hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    hintStyle:
+                        TextStyle(color: AppColors.textSecondary, fontSize: 14),
                     border: InputBorder.none,
                     isDense: true,
                   ),
@@ -339,7 +365,8 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    gradient: _selectedCount > 0 ? AppColors.brandGradient : null,
+                    gradient:
+                        _selectedCount > 0 ? AppColors.brandGradient : null,
                     color: _selectedCount == 0 ? AppColors.surfaceRaised : null,
                     shape: BoxShape.circle,
                   ),
@@ -355,7 +382,9 @@ class _QuickShareContactPickerPageState extends State<QuickShareContactPickerPag
                           )
                         : Icon(
                             Icons.send_rounded,
-                            color: _selectedCount > 0 ? Colors.white : AppColors.textSecondary,
+                            color: _selectedCount > 0
+                                ? Colors.white
+                                : AppColors.textSecondary,
                             size: 22,
                           ),
                   ),
@@ -383,7 +412,9 @@ class _SelectionCheckCircle extends StatelessWidget {
         shape: BoxShape.circle,
         gradient: isSelected ? AppColors.brandGradient : null,
         border: Border.all(
-          color: isSelected ? Colors.transparent : AppColors.textSecondary.withValues(alpha: 0.5),
+          color: isSelected
+              ? Colors.transparent
+              : AppColors.textSecondary.withValues(alpha: 0.5),
           width: 2,
         ),
       ),

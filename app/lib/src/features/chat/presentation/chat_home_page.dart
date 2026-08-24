@@ -2,23 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/data/auth_service.dart';
 import '../../security/data/camouflage_service.dart';
 import '../../security/presentation/camouflage_screen.dart';
 import '../../security/presentation/camouflage_settings_page.dart';
-import '../../../app.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
-import '../../calls/data/call_audio_service.dart';
 import '../../calls/data/call_manager.dart';
 import '../../calls/data/call_service.dart';
-import '../../calls/data/call_signaling_service.dart';
+import '../../calls/data/native_call_notification_service.dart';
+import '../../calls/data/push_notification_service.dart';
 import '../../update/update_service.dart';
 import 'about_page.dart';
-import 'call_screen.dart';
 import 'calls_page.dart';
 import 'contacts_page.dart';
 import 'conversation_page.dart';
@@ -48,9 +45,10 @@ class _ChatHomePageState extends State<ChatHomePage> {
   int _pendingRequestsCount = 0;
   int _totalUnreadCount = 0;
   List<ContactRequestItem> _incomingRequests = [];
+  final Set<String> _selectedConversationIds = {};
+  bool _clearingConversations = false;
   Timer? _homeRefreshTimer;
   Timer? _callCheckTimer;
-  String? _activeShowingCallId;
 
   static const _titles = ['Conversaciones', 'Contactos', 'Llamadas'];
 
@@ -58,23 +56,14 @@ class _ChatHomePageState extends State<ChatHomePage> {
   void initState() {
     super.initState();
     _chatService.loadUserProfile();
+    PushNotificationService.initializeForCurrentUser();
     _fetchHomeData(initial: true);
 
-    _homeRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
-    _callCheckTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) => _checkIncomingRingingCalls());
+    _homeRefreshTimer = Timer.periodic(
+        const Duration(seconds: 3), (_) => _fetchHomeData(initial: false));
+    _callCheckTimer = Timer.periodic(const Duration(milliseconds: 1400),
+        (_) => _checkIncomingRingingCalls());
 
-    CallSignalingService().initializeUserChannel(
-      incomingCallHandler: (event) {
-        CallManager.instance.showIncomingCall(
-          callId: event.callId,
-          callerName: event.callerName,
-          callerAvatar: event.callerAvatar,
-          callerId: event.callerId,
-          conversationId: event.conversationId,
-          callType: event.callType,
-        );
-      },
-    );
     Timer(const Duration(milliseconds: 1200), () {
       if (mounted) UpdateService.checkForUpdates(context);
     });
@@ -91,8 +80,12 @@ class _ChatHomePageState extends State<ChatHomePage> {
     try {
       final incoming = await CallService().checkForIncomingCall();
       if (incoming != null) {
+        final callId = incoming['call_id']?.toString() ?? '';
+        // Polling only runs while the Flutter UI is active. In that state the
+        // in-app call screen replaces the native lock-screen notification.
+        await NativeCallNotificationService.end(callId);
         CallManager.instance.showIncomingCall(
-          callId: incoming['call_id']?.toString() ?? '',
+          callId: callId,
           callerName: incoming['caller_name']?.toString() ?? 'Contacto',
           callerAvatar: incoming['caller_avatar']?.toString(),
           callerId: incoming['caller_id']?.toString(),
@@ -137,6 +130,78 @@ class _ChatHomePageState extends State<ChatHomePage> {
     await _fetchHomeData(initial: false);
   }
 
+  void _toggleConversationSelection(String conversationId) {
+    setState(() {
+      if (!_selectedConversationIds.add(conversationId)) {
+        _selectedConversationIds.remove(conversationId);
+      }
+    });
+  }
+
+  void _clearConversationSelection() {
+    if (_selectedConversationIds.isEmpty) return;
+    setState(_selectedConversationIds.clear);
+  }
+
+  Future<void> _clearSelectedConversations() async {
+    if (_selectedConversationIds.isEmpty || _clearingConversations) return;
+    final count = _selectedConversationIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+            count == 1 ? '¿Eliminar este chat?' : '¿Eliminar $count chats?'),
+        content: const Text(
+          'El historial desaparecerá solamente para ti. La otra persona conservará sus mensajes y los mensajes nuevos volverán a mostrarse.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_outline_rounded),
+            label: const Text('Eliminar para mí'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final selected = _selectedConversationIds.toList(growable: false);
+    setState(() => _clearingConversations = true);
+    try {
+      for (final conversationId in selected) {
+        await _chatService.clearConversationForMe(conversationId);
+      }
+      if (!mounted) return;
+      setState(_selectedConversationIds.clear);
+      await _reloadConversations();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(count == 1
+                ? 'Chat eliminado solamente para ti.'
+                : '$count chats eliminados solamente para ti.'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo eliminar el chat: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _clearingConversations = false);
+    }
+  }
+
   Future<void> _startConversation() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const NewConversationPage()),
@@ -169,12 +234,14 @@ class _ChatHomePageState extends State<ChatHomePage> {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+                  leading: const Icon(Icons.camera_alt_rounded,
+                      color: AppColors.primary),
                   title: const Text('Tomar foto con la cámara'),
                   onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.photo_library_rounded, color: AppColors.secondary),
+                  leading: const Icon(Icons.photo_library_rounded,
+                      color: AppColors.secondary),
                   title: const Text('Elegir foto de la galería'),
                   onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
                 ),
@@ -236,162 +303,222 @@ class _ChatHomePageState extends State<ChatHomePage> {
 
         final hasDefaultPin = CamouflageService.instance.isDefaultPin;
         final profile = ChatService.currentUserProfileNotifier.value;
-        final hasMissingAvatar = (profile == null || profile.avatarUrl == null || profile.avatarUrl!.isEmpty);
-        final totalBadges = (hasDefaultPin ? 1 : 0) + (hasMissingAvatar ? 1 : 0);
+        final hasMissingAvatar = (profile == null ||
+            profile.avatarUrl == null ||
+            profile.avatarUrl!.isEmpty);
+        final totalBadges =
+            (hasDefaultPin ? 1 : 0) + (hasMissingAvatar ? 1 : 0);
+        final isConversationSelection =
+            _selectedIndex == 0 && _selectedConversationIds.isNotEmpty;
 
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 16,
-            title: Row(
-              children: [
-                const BrandLogo(size: 34),
-                const SizedBox(width: 10),
-                Text(
-                  _titles[_selectedIndex],
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
+            leading: isConversationSelection
+                ? IconButton(
+                    tooltip: 'Cancelar selección',
+                    onPressed: _clearConversationSelection,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  )
+                : null,
+            title: isConversationSelection
+                ? Text(
+                    '${_selectedConversationIds.length}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  )
+                : Row(
+                    children: [
+                      const BrandLogo(size: 34),
+                      const SizedBox(width: 10),
+                      Text(
+                        _titles[_selectedIndex],
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
             actions: [
-              if (_selectedIndex == 0)
+              if (isConversationSelection)
+                IconButton(
+                  tooltip: 'Eliminar para mí',
+                  onPressed: _clearingConversations
+                      ? null
+                      : _clearSelectedConversations,
+                  icon: _clearingConversations
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline_rounded),
+                ),
+              if (!isConversationSelection && _selectedIndex == 0)
                 IconButton(
                   tooltip: 'Cámara rápida',
                   onPressed: _openQuickCamera,
-                  icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+                  icon: const Icon(Icons.camera_alt_outlined,
+                      color: Colors.white),
                 ),
-              if (CamouflageService.instance.isCamouflageFeatureActive)
+              if (!isConversationSelection &&
+                  CamouflageService.instance.isCamouflageFeatureActive)
                 IconButton(
                   tooltip: 'Modo pánico / Camuflar',
-                  onPressed: () => CamouflageService.instance.triggerCamouflage(),
-                  icon: const Icon(Icons.visibility_off_rounded, color: AppColors.primary),
+                  onPressed: () =>
+                      CamouflageService.instance.triggerCamouflage(),
+                  icon: const Icon(Icons.visibility_off_rounded,
+                      color: AppColors.primary),
                 ),
-              PopupMenuButton<String>(
-                tooltip: 'Opciones',
-                onSelected: (value) {
-                  if (value == 'settings') {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
-                    );
-                  }
-                  if (value == 'profile') {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
-                    );
-                  }
-                  if (value == 'camouflage') {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const CamouflageSettingsPage()),
-                    );
-                  }
-                  if (value == 'guide') {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const UserGuidePage()),
-                    );
-                  }
-                  if (value == 'about') {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const AboutPage()),
-                    );
-                  }
-                  if (value == 'logout') _signOut();
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'settings',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.settings_outlined, color: AppColors.primary),
-                        const SizedBox(width: 12),
-                        const Expanded(child: Text('Ajustes', style: TextStyle(fontWeight: FontWeight.w600))),
-                        if (totalBadges > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: const BoxDecoration(
-                              color: AppColors.error,
-                              shape: BoxShape.circle,
+              if (!isConversationSelection)
+                PopupMenuButton<String>(
+                  tooltip: 'Opciones',
+                  onSelected: (value) {
+                    if (value == 'settings') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const SettingsPage()),
+                      );
+                    }
+                    if (value == 'profile') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const ProfileSettingsPage()),
+                      );
+                    }
+                    if (value == 'camouflage') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const CamouflageSettingsPage()),
+                      );
+                    }
+                    if (value == 'guide') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const UserGuidePage()),
+                      );
+                    }
+                    if (value == 'about') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const AboutPage()),
+                      );
+                    }
+                    if (value == 'logout') _signOut();
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'settings',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.settings_outlined,
+                              color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                              child: Text('Ajustes',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w600))),
+                          if (totalBadges > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: const BoxDecoration(
+                                color: AppColors.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text('$totalBadges',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
                             ),
-                            child: Text('$totalBadges', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'profile',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person_outline_rounded),
-                        const SizedBox(width: 12),
-                        const Expanded(child: Text('Mi perfil')),
-                        if (hasMissingAvatar)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: const BoxDecoration(
-                              color: AppColors.error,
-                              shape: BoxShape.circle,
+                    PopupMenuItem(
+                      value: 'profile',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person_outline_rounded),
+                          const SizedBox(width: 12),
+                          const Expanded(child: Text('Mi perfil')),
+                          if (hasMissingAvatar)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: const BoxDecoration(
+                                color: AppColors.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Text('1',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
                             ),
-                            child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'camouflage',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.visibility_off_outlined),
-                        const SizedBox(width: 12),
-                        const Expanded(child: Text('Privacidad y camuflaje')),
-                        if (hasDefaultPin)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: const BoxDecoration(
-                              color: AppColors.error,
-                              shape: BoxShape.circle,
+                    PopupMenuItem(
+                      value: 'camouflage',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.visibility_off_outlined),
+                          const SizedBox(width: 12),
+                          const Expanded(child: Text('Privacidad y camuflaje')),
+                          if (hasDefaultPin)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: const BoxDecoration(
+                                color: AppColors.error,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Text('1',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
                             ),
-                            child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'guide',
-                    child: Row(
-                      children: [
-                        Icon(Icons.menu_book_rounded),
-                        SizedBox(width: 12),
-                        Text('Guía de uso'),
-                      ],
+                    const PopupMenuItem(
+                      value: 'guide',
+                      child: Row(
+                        children: [
+                          Icon(Icons.menu_book_rounded),
+                          SizedBox(width: 12),
+                          Text('Guía de uso'),
+                        ],
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'about',
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded),
-                        SizedBox(width: 12),
-                        Text('Acerca de InclusiChat'),
-                      ],
+                    const PopupMenuItem(
+                      value: 'about',
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded),
+                          SizedBox(width: 12),
+                          Text('Acerca de InclusiChat'),
+                        ],
+                      ),
                     ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'logout',
-                    child: Row(
-                      children: [
-                        Icon(Icons.logout_rounded, color: AppColors.error),
-                        SizedBox(width: 12),
-                        Text('Cerrar sesión', style: TextStyle(color: AppColors.error)),
-                      ],
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout_rounded, color: AppColors.error),
+                          SizedBox(width: 12),
+                          Text('Cerrar sesión',
+                              style: TextStyle(color: AppColors.error)),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-                icon: _signingOut
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.more_vert_rounded),
-              ),
+                  ],
+                  icon: _signingOut
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.more_vert_rounded),
+                ),
             ],
           ),
           body: IndexedStack(
@@ -405,8 +532,11 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 filter: _filter,
                 incomingRequests: _incomingRequests,
                 onGoToContacts: () => setState(() => _selectedIndex = 1),
-                onSearchChanged: (value) => setState(() => _searchQuery = value),
+                onSearchChanged: (value) =>
+                    setState(() => _searchQuery = value),
                 onFilterChanged: (value) => setState(() => _filter = value),
+                selectedConversationIds: _selectedConversationIds,
+                onToggleSelection: _toggleConversationSelection,
               ),
               const ContactsPage(),
               const CallsPage(),
@@ -417,13 +547,17 @@ class _ChatHomePageState extends State<ChatHomePage> {
                   tooltip: 'Nuevo chat o contacto',
                   onPressed: _startConversation,
                   backgroundColor: AppColors.primary,
-                  child: const Icon(Icons.add_comment_rounded, color: Colors.white),
+                  child: const Icon(Icons.add_comment_rounded,
+                      color: Colors.white),
                 )
               : null,
           bottomNavigationBar: NavigationBar(
             selectedIndex: _selectedIndex,
             onDestinationSelected: (index) {
-              setState(() => _selectedIndex = index);
+              setState(() {
+                _selectedIndex = index;
+                _selectedConversationIds.clear();
+              });
               if (index == 0) _reloadConversations();
             },
             destinations: [
@@ -485,6 +619,8 @@ class _ConversationList extends StatelessWidget {
     required this.onGoToContacts,
     required this.onSearchChanged,
     required this.onFilterChanged,
+    required this.selectedConversationIds,
+    required this.onToggleSelection,
   });
 
   final List<ConversationSummary> conversations;
@@ -496,6 +632,8 @@ class _ConversationList extends StatelessWidget {
   final VoidCallback onGoToContacts;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<_ConversationFilter> onFilterChanged;
+  final Set<String> selectedConversationIds;
+  final ValueChanged<String> onToggleSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -514,35 +652,43 @@ class _ConversationList extends StatelessWidget {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
             ),
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: const BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.person_add_alt_1_rounded,
+                    color: Colors.white, size: 20),
               ),
               title: Text(
                 '${incomingRequests.length} ${incomingRequests.length == 1 ? 'solicitud de contacto recibida' : 'solicitudes de contacto recibidas'}',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               ),
               subtitle: Text(
                 'De @${incomingRequests.first.profile.username ?? incomingRequests.first.profile.displayName} • Toca para responder',
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
               ),
               trailing: FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 onPressed: onGoToContacts,
-                child: const Text('Revisar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                child: const Text('Revisar',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
               onTap: onGoToContacts,
             ),
@@ -623,119 +769,155 @@ class _ConversationList extends StatelessWidget {
                           const Divider(height: 1, indent: 82),
                       itemBuilder: (context, index) {
                         final item = items[index];
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          leading: CircleAvatar(
-                            radius: 27,
-                            backgroundColor: AppColors.secondary,
-                            backgroundImage: item.avatarUrl != null ? NetworkImage(item.avatarUrl!) : null,
-                            child: item.avatarUrl == null
-                                ? Text(item.title.characters.first.toUpperCase())
-                                : null,
-                          ),
-                          title: Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: item.unreadCount > 0
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
+                        final isSelected =
+                            selectedConversationIds.contains(item.id);
+                        return ColoredBox(
+                          color: isSelected
+                              ? AppColors.primary.withValues(alpha: 0.18)
+                              : Colors.transparent,
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                          ),
-                          subtitle: Row(
-                            children: [
-                              if (item.isLastMessageMine && item.lastMessage != null) ...[
-                                Icon(
-                                  item.lastMessageReceiptStatus == 'sent'
-                                      ? Icons.check_rounded
-                                      : Icons.done_all_rounded,
-                                  size: 16,
-                                  color: switch (item.lastMessageReceiptStatus) {
-                                    'read' => AppColors.receiptRead,
-                                    _ => AppColors.textSecondary,
-                                  },
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  item.lastMessage ?? 'Conversación nueva',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: item.unreadCount > 0
-                                        ? Colors.white
-                                        : AppColors.textSecondary,
-                                    fontWeight: item.unreadCount > 0
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          trailing: SizedBox(
-                            width: 76,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min,
+                            leading: Stack(
+                              clipBehavior: Clip.none,
                               children: [
-                                Text(
-                                  _formatActivity(item.lastActivityAt),
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    color: item.unreadCount > 0
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary,
-                                    fontSize: 12,
-                                    fontWeight: item.unreadCount > 0
-                                        ? FontWeight.w700
-                                        : FontWeight.normal,
-                                  ),
+                                CircleAvatar(
+                                  radius: 27,
+                                  backgroundColor: AppColors.secondary,
+                                  backgroundImage: item.avatarUrl != null
+                                      ? NetworkImage(item.avatarUrl!)
+                                      : null,
+                                  child: item.avatarUrl == null
+                                      ? Text(item.title.characters.first
+                                          .toUpperCase())
+                                      : null,
                                 ),
-                                if (item.unreadCount > 0) ...[
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.brandGradient,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      item.unreadCount > 99
-                                          ? '99+'
-                                          : '${item.unreadCount}',
-                                      style: const TextStyle(
+                                if (isSelected)
+                                  const Positioned(
+                                    right: -2,
+                                    bottom: -2,
+                                    child: CircleAvatar(
+                                      radius: 11,
+                                      backgroundColor: AppColors.primary,
+                                      child: Icon(
+                                        Icons.check_rounded,
+                                        size: 16,
                                         color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                   ),
-                                ],
                               ],
                             ),
-                          ),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => ConversationPage(
-                                  conversationId: item.id,
-                                  title: item.title,
-                                  avatarUrl: item.avatarUrl,
-                                ),
+                            title: Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: item.unreadCount > 0
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
                               ),
-                            );
-                            await onRefresh();
-                          },
+                            ),
+                            subtitle: Row(
+                              children: [
+                                if (item.isLastMessageMine &&
+                                    item.lastMessage != null) ...[
+                                  Icon(
+                                    item.lastMessageReceiptStatus == 'sent'
+                                        ? Icons.check_rounded
+                                        : Icons.done_all_rounded,
+                                    size: 16,
+                                    color: switch (
+                                        item.lastMessageReceiptStatus) {
+                                      'read' => AppColors.receiptRead,
+                                      _ => AppColors.textSecondary,
+                                    },
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    item.lastMessage ?? 'Conversación nueva',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: item.unreadCount > 0
+                                          ? Colors.white
+                                          : AppColors.textSecondary,
+                                      fontWeight: item.unreadCount > 0
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            trailing: SizedBox(
+                              width: 76,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _formatActivity(item.lastActivityAt),
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      color: item.unreadCount > 0
+                                          ? AppColors.primary
+                                          : AppColors.textSecondary,
+                                      fontSize: 12,
+                                      fontWeight: item.unreadCount > 0
+                                          ? FontWeight.w700
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                  if (item.unreadCount > 0) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: AppColors.brandGradient,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        item.unreadCount > 99
+                                            ? '99+'
+                                            : '${item.unreadCount}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            onTap: () async {
+                              if (selectedConversationIds.isNotEmpty) {
+                                onToggleSelection(item.id);
+                                return;
+                              }
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => ConversationPage(
+                                    conversationId: item.id,
+                                    title: item.title,
+                                    avatarUrl: item.avatarUrl,
+                                  ),
+                                ),
+                              );
+                              await onRefresh();
+                            },
+                            onLongPress: () => onToggleSelection(item.id),
+                          ),
                         );
                       },
                     ),
@@ -757,8 +939,10 @@ class _ConversationList extends StatelessWidget {
       _ConversationFilter.all => true,
       _ConversationFilter.unread => item.unreadCount > 0,
       _ConversationFilter.starred => item.isStarred,
-      _ConversationFilter.circles => item.type == 'circle' || item.type == 'group',
-      _ConversationFilter.collectives => item.type == 'collective' || item.type == 'community',
+      _ConversationFilter.circles =>
+        item.type == 'circle' || item.type == 'group',
+      _ConversationFilter.collectives =>
+        item.type == 'collective' || item.type == 'community',
     };
   }
 
@@ -799,9 +983,8 @@ class _FilterChip extends StatelessWidget {
         onSelected: (_) => onSelected(value),
         selectedColor: AppColors.primary.withValues(alpha: 0.22),
         side: BorderSide(
-          color: selected == value
-              ? AppColors.primary
-              : AppColors.surfaceRaised,
+          color:
+              selected == value ? AppColors.primary : AppColors.surfaceRaised,
         ),
       ),
     );

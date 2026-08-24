@@ -102,7 +102,7 @@
         <ul>
           <li><strong>Datos de Cuenta:</strong> Dirección de correo electrónico (utilizada exclusivamente para autenticación y recuperación de cuenta), nombre visible de usuario y un alias único (@usuario).</li>
           <li><strong>Información de Perfil Opcional:</strong> Biografía de perfil, pronombres y foto/avatar de perfil que tú decidas compartir voluntariamente.</li>
-          <li><strong>Contenido de Mensajería:</strong> Mensajes de texto, notas de voz o archivos adjuntos enviados a través de la plataforma, protegidos por políticas de seguridad Row Level Security (RLS) y aislamiento de datos por usuario.</li>
+          <li><strong>Contenido de Mensajería:</strong> Mensajes de texto, notas de voz e imágenes enviados mediante Supabase. La multimedia se guarda en un bucket privado y se entrega mediante enlaces temporales a miembros autorizados de la conversación.</li>
           <li><strong>No recopilamos:</strong> No solicitamos tu número de teléfono, no accedemos a tus listas de contactos sin tu acción explícita y no leemos datos de otras aplicaciones.</li>
         </ul>
       </section>
@@ -122,7 +122,8 @@
         <p>Implementamos medidas de seguridad técnicas e institucionales de vanguardia:</p>
         <ul>
           <li><strong>Cifrado en Tránsito:</strong> Todas las comunicaciones se transmiten mediante canales cifrados TLS/HTTPS de alta seguridad.</li>
-          <li><strong>Políticas RLS (Row Level Security):</strong> La base de datos restringe estrictamente que cada usuario solo pueda acceder a los mensajes y conversaciones a los que pertenece legítimamente.</li>
+          <li><strong>Políticas RLS (Row Level Security):</strong> La base de datos verifica la membresía de la conversación antes de permitir acceso a mensajes y archivos.</li>
+          <li><strong>Alcance del cifrado:</strong> Las conexiones utilizan TLS/HTTPS. La versión actual no implementa cifrado de extremo a extremo, por lo que no debe asumirse protección E2EE.</li>
           <li><strong>Modo Camuflaje:</strong> Función del lado del cliente que permite proteger la interfaz de miradas no autorizadas mediante una calculadora interactiva con PIN secreto personalizable.</li>
         </ul>
       </section>
@@ -133,7 +134,7 @@
         <p>Para eliminar tu cuenta:</p>
         <ul>
           <li>Abre InclusiChat $\rightarrow$ Ve a <strong>Ajustes</strong> $\rightarrow$ <strong>Seguridad y blindaje</strong> $\rightarrow$ Pulsa <strong>«Eliminar mi cuenta y borrar mis datos»</strong>.</li>
-          <li>Esta acción borrará de manera inmediata e irreversible tu usuario, perfil, mensajes, solicitudes y contactos de nuestros servidores.</li>
+          <li>Esta acción solicita el borrado de tu usuario, perfil, mensajes, solicitudes y contactos almacenados por InclusiChat. Los archivos enviados con versiones antiguas mediante proveedores externos requieren un proceso de revisión separado.</li>
         </ul>
       </section>
 

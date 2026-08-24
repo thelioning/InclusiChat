@@ -25,7 +25,8 @@ class _CallsPageState extends State<CallsPage> {
   void initState() {
     super.initState();
     _loadData(initial: true);
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) => _loadData(initial: false));
+    _refreshTimer = Timer.periodic(
+        const Duration(seconds: 4), (_) => _loadData(initial: false));
   }
 
   @override
@@ -60,17 +61,19 @@ class _CallsPageState extends State<CallsPage> {
     String? conversationId,
     required CallType type,
   }) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CallScreen(
-          contactName: contactName,
-          avatarUrl: avatarUrl,
-          receiverUserId: receiverUserId,
-          conversationId: conversationId,
-          callType: type,
-        ),
-      ),
-    ).then((_) => _loadData(initial: false));
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => CallScreen(
+              contactName: contactName,
+              avatarUrl: avatarUrl,
+              receiverUserId: receiverUserId,
+              conversationId: conversationId,
+              callType: type,
+            ),
+          ),
+        )
+        .then((_) => _loadData(initial: false));
   }
 
   void _openNewCallSheet() {
@@ -87,7 +90,8 @@ class _CallsPageState extends State<CallsPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.people_outline_rounded, size: 48, color: AppColors.textSecondary),
+                const Icon(Icons.people_outline_rounded,
+                    size: 48, color: AppColors.textSecondary),
                 const SizedBox(height: 12),
                 const Text(
                   'No tienes contactos agregados',
@@ -97,7 +101,8 @@ class _CallsPageState extends State<CallsPage> {
                 const Text(
                   'Agrega contactos en la pestaña "Contactos" para iniciar llamadas seguras.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 FilledButton(
@@ -131,25 +136,33 @@ class _CallsPageState extends State<CallsPage> {
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: AppColors.secondary,
-                        backgroundImage: contact.avatarUrl != null && contact.avatarUrl!.isNotEmpty
+                        backgroundImage: contact.avatarUrl != null &&
+                                contact.avatarUrl!.isNotEmpty
                             ? NetworkImage(contact.avatarUrl!)
                             : null,
-                        child: contact.avatarUrl == null || contact.avatarUrl!.isEmpty
+                        child: contact.avatarUrl == null ||
+                                contact.avatarUrl!.isEmpty
                             ? Text(
                                 contact.displayName.isNotEmpty
                                     ? contact.displayName[0].toUpperCase()
                                     : '?',
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white),
                               )
                             : null,
                       ),
-                      title: Text(contact.displayName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text('@${contact.username}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      title: Text(contact.displayName,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('@${contact.username}',
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.call_rounded, color: AppColors.primary),
+                            icon: const Icon(Icons.call_rounded,
+                                color: AppColors.primary),
                             onPressed: () {
                               Navigator.of(ctx).pop();
                               _startCall(
@@ -161,7 +174,8 @@ class _CallsPageState extends State<CallsPage> {
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.videocam_rounded, color: AppColors.primary),
+                            icon: const Icon(Icons.videocam_rounded,
+                                color: AppColors.primary),
                             onPressed: () {
                               Navigator.of(ctx).pop();
                               _startCall(
@@ -188,7 +202,9 @@ class _CallsPageState extends State<CallsPage> {
   String _formatCallDate(DateTime dt) {
     final now = DateTime.now();
     final local = dt.toLocal();
-    final isToday = local.year == now.year && local.month == now.month && local.day == now.day;
+    final isToday = local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     if (isToday) return 'Hoy, $hour:$minute';
@@ -208,21 +224,23 @@ class _CallsPageState extends State<CallsPage> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
-            // Banner de Cifrado E2EE
+            // Aviso de alcance de la vista previa de llamadas.
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.lock_outline_rounded, color: AppColors.primary, size: 22),
+                  const Icon(Icons.lock_outline_rounded,
+                      color: AppColors.primary, size: 22),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Tus llamadas y videollamadas están protegidas con cifrado de extremo a extremo.',
+                      'Vista previa experimental: todavía no transporta audio o video.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade300,
@@ -239,35 +257,50 @@ class _CallsPageState extends State<CallsPage> {
             if (_callHistory.isNotEmpty) ...[
               const Text(
                 'Llamadas recientes',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textSecondary),
               ),
               const SizedBox(height: 10),
               ..._callHistory.map((call) {
-                final isMissed = call.status == 'missed' || call.status == 'rejected';
+                final isMissed =
+                    call.status == 'missed' || call.status == 'rejected';
                 final iconColor = isMissed
                     ? AppColors.error
                     : (call.isOutgoing ? AppColors.primary : AppColors.success);
 
                 final statusIcon = isMissed
                     ? Icons.call_missed_rounded
-                    : (call.isOutgoing ? Icons.call_made_rounded : Icons.call_received_rounded);
+                    : (call.isOutgoing
+                        ? Icons.call_made_rounded
+                        : Icons.call_received_rounded);
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   color: AppColors.surfaceRaised,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     leading: CircleAvatar(
                       radius: 22,
                       backgroundColor: AppColors.secondary,
-                      backgroundImage: call.otherUserAvatar != null && call.otherUserAvatar!.isNotEmpty
+                      backgroundImage: call.otherUserAvatar != null &&
+                              call.otherUserAvatar!.isNotEmpty
                           ? NetworkImage(call.otherUserAvatar!)
                           : null,
-                      child: call.otherUserAvatar == null || call.otherUserAvatar!.isEmpty
+                      child: call.otherUserAvatar == null ||
+                              call.otherUserAvatar!.isEmpty
                           ? Text(
-                              call.otherUserName.isNotEmpty ? call.otherUserName[0].toUpperCase() : '?',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                              call.otherUserName.isNotEmpty
+                                  ? call.otherUserName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontSize: 16),
                             )
                           : null,
                     ),
@@ -285,14 +318,17 @@ class _CallsPageState extends State<CallsPage> {
                         const SizedBox(width: 4),
                         Text(
                           '${_formatCallDate(call.startedAt)} • ${call.formattedDuration}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
                     trailing: IconButton(
                       tooltip: 'Llamar de nuevo',
                       icon: Icon(
-                        call.callType == 'video' ? Icons.videocam_rounded : Icons.call_rounded,
+                        call.callType == 'video'
+                            ? Icons.videocam_rounded
+                            : Icons.call_rounded,
                         color: AppColors.primary,
                       ),
                       onPressed: () => _startCall(
@@ -300,7 +336,9 @@ class _CallsPageState extends State<CallsPage> {
                         avatarUrl: call.otherUserAvatar,
                         receiverUserId: call.otherUserId,
                         conversationId: call.conversationId,
-                        type: call.callType == 'video' ? CallType.video : CallType.audio,
+                        type: call.callType == 'video'
+                            ? CallType.video
+                            : CallType.audio,
                       ),
                     ),
                   ),
@@ -311,7 +349,10 @@ class _CallsPageState extends State<CallsPage> {
 
             const Text(
               'Contactos para llamar',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary),
             ),
             const SizedBox(height: 10),
 
@@ -321,17 +362,20 @@ class _CallsPageState extends State<CallsPage> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.phone_missed_rounded, size: 54, color: Colors.grey.shade600),
+                      Icon(Icons.phone_missed_rounded,
+                          size: 54, color: Colors.grey.shade600),
                       const SizedBox(height: 14),
                       const Text(
                         'Aún no tienes contactos para llamar',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       const SizedBox(height: 6),
                       const Text(
                         'Conéctate con otros usuarios mediante su @alias para realizar llamadas de audio y video seguras.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -342,33 +386,45 @@ class _CallsPageState extends State<CallsPage> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   color: AppColors.surfaceRaised,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     leading: CircleAvatar(
                       radius: 22,
                       backgroundColor: AppColors.secondary,
-                      backgroundImage: contact.avatarUrl != null && contact.avatarUrl!.isNotEmpty
+                      backgroundImage: contact.avatarUrl != null &&
+                              contact.avatarUrl!.isNotEmpty
                           ? NetworkImage(contact.avatarUrl!)
                           : null,
-                      child: contact.avatarUrl == null || contact.avatarUrl!.isEmpty
+                      child: contact.avatarUrl == null ||
+                              contact.avatarUrl!.isEmpty
                           ? Text(
-                              contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                              contact.displayName.isNotEmpty
+                                  ? contact.displayName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontSize: 16),
                             )
                           : null,
                     ),
                     title: Text(
                       contact.displayName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     subtitle: Row(
                       children: [
-                        const Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 13),
+                        const Icon(Icons.verified_user_rounded,
+                            color: AppColors.primary, size: 13),
                         const SizedBox(width: 4),
                         Text(
                           '@${contact.username}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -377,7 +433,8 @@ class _CallsPageState extends State<CallsPage> {
                       children: [
                         IconButton(
                           tooltip: 'Llamada de voz',
-                          icon: const Icon(Icons.call_rounded, color: AppColors.primary),
+                          icon: const Icon(Icons.call_rounded,
+                              color: AppColors.primary),
                           onPressed: () => _startCall(
                             contactName: contact.displayName,
                             avatarUrl: contact.avatarUrl,
@@ -387,7 +444,8 @@ class _CallsPageState extends State<CallsPage> {
                         ),
                         IconButton(
                           tooltip: 'Videollamada',
-                          icon: const Icon(Icons.videocam_rounded, color: AppColors.primary),
+                          icon: const Icon(Icons.videocam_rounded,
+                              color: AppColors.primary),
                           onPressed: () => _startCall(
                             contactName: contact.displayName,
                             avatarUrl: contact.avatarUrl,

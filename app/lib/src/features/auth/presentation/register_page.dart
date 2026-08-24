@@ -68,7 +68,8 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _checkUsernameAvailability() async {
-    final raw = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+    final raw =
+        _usernameController.text.trim().toLowerCase().replaceAll('@', '');
     if (raw.length < 3) {
       if (mounted) {
         setState(() {
@@ -84,7 +85,8 @@ class _RegisterPageState extends State<RegisterPage> {
       final isAvailable = await AuthService().isUsernameAvailable(raw);
       if (!mounted) return;
       if (!isAvailable) {
-        final suggestions = await AuthService().generateUsernameSuggestions(raw);
+        final suggestions =
+            await AuthService().generateUsernameSuggestions(raw);
         if (!mounted) return;
         setState(() {
           _checkingUsername = false;
@@ -143,7 +145,8 @@ class _RegisterPageState extends State<RegisterPage> {
       );
       return;
     }
-    final username = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+    final username =
+        _usernameController.text.trim().toLowerCase().replaceAll('@', '');
     final email = _emailController.text.trim();
     final displayName = _nameController.text.trim();
 
@@ -152,7 +155,8 @@ class _RegisterPageState extends State<RegisterPage> {
     // Verificar si el alias ya existe antes de registrar
     final isAvailable = await AuthService().isUsernameAvailable(username);
     if (!isAvailable) {
-      final suggestions = await AuthService().generateUsernameSuggestions(username);
+      final suggestions =
+          await AuthService().generateUsernameSuggestions(username);
       if (mounted) {
         setState(() {
           _isSubmitting = false;
@@ -162,7 +166,8 @@ class _RegisterPageState extends State<RegisterPage> {
         _formKey.currentState?.validate();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('El alias @$username ya está registrado. Toca una de las sugerencias.'),
+            content: Text(
+                'El alias @$username ya está registrado. Toca una de las sugerencias.'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -193,7 +198,8 @@ class _RegisterPageState extends State<RegisterPage> {
               const Icon(Icons.check_circle_rounded, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('¡Cuenta creada con éxito para @$username! Ya puedes iniciar sesión.'),
+                child: Text(
+                    '¡Cuenta creada con éxito para @$username! Ya puedes iniciar sesión.'),
               ),
             ],
           ),
@@ -210,7 +216,8 @@ class _RegisterPageState extends State<RegisterPage> {
       if (normalized.contains('alias de usuario ya está en uso') ||
           normalized.contains('profiles_username_key') ||
           normalized.contains('username')) {
-        final suggestions = await AuthService().generateUsernameSuggestions(username);
+        final suggestions =
+            await AuthService().generateUsernameSuggestions(username);
         if (mounted) {
           setState(() {
             _usernameError = 'El alias @$username ya está en uso.';
@@ -219,7 +226,8 @@ class _RegisterPageState extends State<RegisterPage> {
           _formKey.currentState?.validate();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('El alias @$username ya está registrado. Toca una de las sugerencias.'),
+              content: Text(
+                  'El alias @$username ya está registrado. Toca una de las sugerencias.'),
               backgroundColor: AppColors.warning,
             ),
           );
@@ -229,8 +237,8 @@ class _RegisterPageState extends State<RegisterPage> {
       final message = normalized.contains('already registered')
           ? 'Ya existe una cuenta con ese correo.'
           : normalized.contains('rate')
-          ? 'Demasiados intentos. Espera un momento.'
-          : 'Error de autenticación: ${error.message}';
+              ? 'Demasiados intentos. Espera un momento.'
+              : 'Error de autenticación: ${error.message}';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: AppColors.error),
       );
@@ -316,39 +324,47 @@ class _RegisterPageState extends State<RegisterPage> {
                           decoration: InputDecoration(
                             labelText: 'Alias único (@usuario)',
                             prefixText: '@',
-                            prefixIcon: const Icon(Icons.alternate_email_rounded),
+                            prefixIcon:
+                                const Icon(Icons.alternate_email_rounded),
                             suffixIcon: _checkingUsername
                                 ? const SizedBox.square(
                                     dimension: 16,
                                     child: Padding(
                                       padding: EdgeInsets.all(12),
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
                                     ),
                                   )
                                 : null,
-                            helperText: 'Tus contactos podrán encontrarte con este alias.',
+                            helperText:
+                                'Tus contactos podrán encontrarte con este alias.',
                           ),
                         ),
                       ),
-                      if (_usernameError != null || _usernameSuggestions.isNotEmpty) ...[
+                      if (_usernameError != null ||
+                          _usernameSuggestions.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: AppColors.warning.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                            border: Border.all(
+                                color:
+                                    AppColors.warning.withValues(alpha: 0.4)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.warning),
+                                  const Icon(Icons.info_outline_rounded,
+                                      size: 16, color: AppColors.warning),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
-                                      _usernameError ?? 'El alias ya existe. Sugerencias disponibles:',
+                                      _usernameError ??
+                                          'El alias ya existe. Sugerencias disponibles:',
                                       style: const TextStyle(
                                         color: AppColors.warning,
                                         fontSize: 12,
@@ -371,27 +387,34 @@ class _RegisterPageState extends State<RegisterPage> {
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
-                                  children: _usernameSuggestions.map((s) => ActionChip(
-                                    backgroundColor: AppColors.surface,
-                                    side: const BorderSide(color: AppColors.primary, width: 1.2),
-                                    avatar: const Icon(Icons.add_circle_outline, size: 14, color: AppColors.primary),
-                                    label: Text(
-                                      '@$s',
-                                      style: const TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _usernameController.text = s;
-                                        _usernameError = null;
-                                        _usernameSuggestions = [];
-                                      });
-                                      _formKey.currentState?.validate();
-                                    },
-                                  )).toList(),
+                                  children: _usernameSuggestions
+                                      .map((s) => ActionChip(
+                                            backgroundColor: AppColors.surface,
+                                            side: const BorderSide(
+                                                color: AppColors.primary,
+                                                width: 1.2),
+                                            avatar: const Icon(
+                                                Icons.add_circle_outline,
+                                                size: 14,
+                                                color: AppColors.primary),
+                                            label: Text(
+                                              '@$s',
+                                              style: const TextStyle(
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _usernameController.text = s;
+                                                _usernameError = null;
+                                                _usernameSuggestions = [];
+                                              });
+                                              _formKey.currentState?.validate();
+                                            },
+                                          ))
+                                      .toList(),
                                 ),
                               ],
                             ],
@@ -459,8 +482,8 @@ class _RegisterPageState extends State<RegisterPage> {
                         onChanged: _isSubmitting
                             ? null
                             : (value) => setState(
-                                () => _acceptedTerms = value ?? false,
-                              ),
+                                  () => _acceptedTerms = value ?? false,
+                                ),
                         controlAffinity: ListTileControlAffinity.leading,
                         title: const Text(
                           'Acepto los términos de uso y la política de privacidad.',

@@ -21,8 +21,7 @@ class SupabaseInitializationApp extends StatefulWidget {
       _SupabaseInitializationAppState();
 }
 
-class _SupabaseInitializationAppState
-    extends State<SupabaseInitializationApp> {
+class _SupabaseInitializationAppState extends State<SupabaseInitializationApp> {
   late Future<void> _initialization;
 
   @override

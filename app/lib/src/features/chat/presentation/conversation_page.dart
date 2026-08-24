@@ -2,15 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
 import 'call_screen.dart';
+import 'in_app_camera_page.dart';
 
 class ConversationPage extends StatefulWidget {
   const ConversationPage({
@@ -60,8 +63,7 @@ class _ConversationPageState extends State<ConversationPage> {
   }
 
   void _onScroll() {
-    final show =
-        _scrollController.hasClients &&
+    final show = _scrollController.hasClients &&
         (_scrollController.position.maxScrollExtent -
                 _scrollController.position.pixels) >
             180;
@@ -108,14 +110,17 @@ class _ConversationPageState extends State<ConversationPage> {
     } catch (e) {
       _controller.text = text;
       if (mounted) {
-        final cleanErr = e.toString()
+        final cleanErr = e
+            .toString()
             .replaceAll('Exception:', '')
             .replaceAll('PostgrestException', '')
             .replaceAll('(message:', '')
             .trim();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(cleanErr.isNotEmpty ? cleanErr : 'No se pudo enviar el mensaje.'),
+            content: Text(cleanErr.isNotEmpty
+                ? cleanErr
+                : 'No se pudo enviar el mensaje.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -179,7 +184,8 @@ class _ConversationPageState extends State<ConversationPage> {
           IconButton(
             tooltip: 'Videollamada',
             onPressed: () async {
-              final otherId = await _service.getOtherParticipantId(widget.conversationId);
+              final otherId =
+                  await _service.getOtherParticipantId(widget.conversationId);
               if (context.mounted) {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -199,7 +205,8 @@ class _ConversationPageState extends State<ConversationPage> {
           IconButton(
             tooltip: 'Llamada de voz',
             onPressed: () async {
-              final otherId = await _service.getOtherParticipantId(widget.conversationId);
+              final otherId =
+                  await _service.getOtherParticipantId(widget.conversationId);
               if (context.mounted) {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -251,7 +258,8 @@ class _ConversationPageState extends State<ConversationPage> {
                   children: [
                     Icon(Icons.delete_sweep_outlined, color: AppColors.error),
                     SizedBox(width: 12),
-                    Text('Vaciar conversación', style: TextStyle(color: AppColors.error)),
+                    Text('Vaciar conversación',
+                        style: TextStyle(color: AppColors.error)),
                   ],
                 ),
               ),
@@ -293,10 +301,10 @@ class _ConversationPageState extends State<ConversationPage> {
                         }
                       }
                       messages.sort(
-                        (a, b) => DateTime.parse(a['created_at'] as String)
-                            .compareTo(
-                              DateTime.parse(b['created_at'] as String),
-                            ),
+                        (a, b) =>
+                            DateTime.parse(a['created_at'] as String).compareTo(
+                          DateTime.parse(b['created_at'] as String),
+                        ),
                       );
                       _markIncomingMessagesRead(messages);
                       _keepLatestMessageVisible(messages.length);
@@ -313,12 +321,13 @@ class _ConversationPageState extends State<ConversationPage> {
                         );
                       }
                       return StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: _service.watchReceipts(),
+                        stream: _service.watchReceipts(
+                          messages.map((message) => message['id'] as String),
+                        ),
                         builder: (context, receiptSnapshot) {
                           final receiptStatus = <String, String>{};
-                          for (final receipt
-                              in receiptSnapshot.data ??
-                                  const <Map<String, dynamic>>[]) {
+                          for (final receipt in receiptSnapshot.data ??
+                              const <Map<String, dynamic>>[]) {
                             final messageId = receipt['message_id'] as String;
                             final status = receipt['status'] as String;
                             if (status == 'read' ||
@@ -334,6 +343,7 @@ class _ConversationPageState extends State<ConversationPage> {
                               final message = messages[index];
                               final own = _service.isOwnMessage(message);
                               return _MessageBubble(
+                                key: ValueKey(message['id']),
                                 messageId: message['id'] as String,
                                 content: message['content'] as String? ?? '',
                                 type: message['type'] as String?,
@@ -343,7 +353,8 @@ class _ConversationPageState extends State<ConversationPage> {
                                   message['created_at'] as String,
                                 ),
                                 receiptStatus: receiptStatus[message['id']],
-                                onLongPress: () => _showMessageOptions(message, own),
+                                onLongPress: () =>
+                                    _showMessageOptions(message, own),
                               );
                             },
                           );
@@ -414,7 +425,8 @@ class _ConversationPageState extends State<ConversationPage> {
                         ),
                         IconButton(
                           tooltip: 'Tomar foto',
-                          onPressed: () => _pickAndSendImage(ImageSource.camera),
+                          onPressed: () =>
+                              _pickAndSendImage(ImageSource.camera),
                           icon: const Icon(Icons.camera_alt_outlined),
                         ),
                       ],
@@ -426,8 +438,8 @@ class _ConversationPageState extends State<ConversationPage> {
                     onPressed: _sending
                         ? null
                         : _hasText
-                        ? _send
-                        : _showVoiceNoteRecorder,
+                            ? _send
+                            : _showVoiceNoteRecorder,
                     icon: _sending
                         ? const SizedBox.square(
                             dimension: 18,
@@ -464,10 +476,14 @@ class _ConversationPageState extends State<ConversationPage> {
             CircleAvatar(
               radius: 36,
               backgroundColor: AppColors.secondary,
-              backgroundImage: widget.avatarUrl != null ? NetworkImage(widget.avatarUrl!) : null,
+              backgroundImage: widget.avatarUrl != null
+                  ? NetworkImage(widget.avatarUrl!)
+                  : null,
               child: widget.avatarUrl == null
                   ? Text(
-                      widget.title.isNotEmpty ? widget.title.characters.first.toUpperCase() : '?',
+                      widget.title.isNotEmpty
+                          ? widget.title.characters.first.toUpperCase()
+                          : '?',
                       style: const TextStyle(fontSize: 28, color: Colors.white),
                     )
                   : null,
@@ -496,7 +512,8 @@ class _ConversationPageState extends State<ConversationPage> {
                   Expanded(
                     child: Text(
                       'Mensajería con aislamiento de datos y cifrado en tránsito.',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -523,9 +540,12 @@ class _ConversationPageState extends State<ConversationPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Vaciar conversación'),
-        content: const Text('¿Estás seguro de que deseas limpiar los mensajes de este chat?'),
+        content: const Text(
+            '¿Estás seguro de que deseas limpiar los mensajes de este chat?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -581,16 +601,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 label: 'Documento',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _sendTextMessage('📄 Documento seguro adjunto');
-                },
-              ),
-              _AttachmentOption(
-                icon: Icons.location_on_rounded,
-                color: Colors.greenAccent,
-                label: 'Ubicación',
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _sendTextMessage('📍 Ubicación segura compartida');
+                  _pickAndSendDocument();
                 },
               ),
             ],
@@ -602,18 +613,47 @@ class _ConversationPageState extends State<ConversationPage> {
 
   Future<void> _pickAndSendImage(ImageSource source) async {
     try {
-      final picker = ImagePicker();
-      final file = await picker.pickImage(
-        source: source,
-        imageQuality: 50,
-        maxWidth: 800,
-        maxHeight: 800,
-      );
-      if (file == null) return;
+      String? imagePath;
+      if (source == ImageSource.gallery) {
+        // Some Android 13+ vendor Photo Picker implementations return no
+        // result even after the user selects an image. FilePicker uses the
+        // document provider and is a reliable fallback on those devices.
+        // FileType.image is intercepted by the mandatory Android Photo Picker
+        // on recent Android versions. The Infinix provider can return without
+        // a selected URI, so request the general document provider and validate
+        // the chosen file locally instead.
+        final selected = await FilePicker.pickFiles(type: FileType.any);
+        if (selected.isEmpty) return;
+        final picked = selected.single;
+        final extensionSeparator = picked.name.lastIndexOf('.');
+        final extension = extensionSeparator < 0
+            ? null
+            : picked.name.substring(extensionSeparator + 1).toLowerCase();
+        if (!const {'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
+          throw const FormatException(
+            'Selecciona una imagen JPG, JPEG, PNG o WebP.',
+          );
+        }
+        imagePath = picked.path;
+      } else {
+        imagePath = await Navigator.of(context).push<String>(
+          MaterialPageRoute<String>(
+            builder: (_) => const InAppCameraPage(),
+          ),
+        );
+      }
+      if (imagePath == null) {
+        throw StateError('La imagen seleccionada no está disponible.');
+      }
+
+      final caption = await _confirmImageSend(imagePath);
+      if (caption == null || !mounted) return;
 
       setState(() => _sending = true);
-      final imageUrl = await _service.uploadImageFile(file.path);
-      final caption = _controller.text.trim();
+      final imageUrl = await _service.uploadImageFile(
+        imagePath,
+        conversationId: widget.conversationId,
+      );
 
       await _service.sendImageMessage(
         conversationId: widget.conversationId,
@@ -622,11 +662,13 @@ class _ConversationPageState extends State<ConversationPage> {
       );
       _controller.clear();
       _onTextChanged();
+      _jumpToLatest();
     } catch (e) {
+      debugPrint('Image selection/send error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo enviar la foto.'),
+          SnackBar(
+            content: Text('No se pudo enviar la foto: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -636,13 +678,57 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
-  Future<void> _sendTextMessage(String text) async {
-    setState(() => _sending = true);
+  Future<String?> _confirmImageSend(String imagePath) async {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _ImageSendPreview(
+        imagePath: imagePath,
+        initialCaption: _controller.text,
+      ),
+    );
+  }
+
+  Future<void> _pickAndSendDocument() async {
     try {
-      await _service.sendTextMessage(
-        conversationId: widget.conversationId,
-        content: text,
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const [
+          'pdf',
+          'txt',
+          'csv',
+          'zip',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+        ],
       );
+      if (result.isEmpty) return;
+      final selected = result.single;
+      final path = selected.path;
+      if (path == null) throw StateError('El documento no está disponible.');
+
+      setState(() => _sending = true);
+      final fileUrl = await _service.uploadDocumentFile(
+        path,
+        conversationId: widget.conversationId,
+      );
+      await _service.sendDocumentMessage(
+        conversationId: widget.conversationId,
+        fileUrl: fileUrl,
+        fileName: selected.name,
+        fileSize: await selected.length(),
+      );
+      _jumpToLatest();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo enviar el documento: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -651,7 +737,10 @@ class _ConversationPageState extends State<ConversationPage> {
   Future<void> _sendAudioVoiceNote(String filePath, int durationSeconds) async {
     setState(() => _sending = true);
     try {
-      final audioUrl = await _service.uploadAudioFile(filePath);
+      final audioUrl = await _service.uploadAudioFile(
+        filePath,
+        conversationId: widget.conversationId,
+      );
       await _service.sendAudioMessage(
         conversationId: widget.conversationId,
         audioUrl: audioUrl,
@@ -665,6 +754,12 @@ class _ConversationPageState extends State<ConversationPage> {
         );
       }
     } finally {
+      try {
+        final temporaryVoiceNote = File(filePath);
+        if (await temporaryVoiceNote.exists()) {
+          await temporaryVoiceNote.delete();
+        }
+      } catch (_) {}
       if (mounted) setState(() => _sending = false);
     }
   }
@@ -685,7 +780,18 @@ class _ConversationPageState extends State<ConversationPage> {
   }
 
   void _showQuickEmojiPicker() {
-    final emojis = ['💜', '🏳️‍🌈', '✨', '👋', '❤️', '😊', '🔒', '🫂', '🔥', '👏'];
+    final emojis = [
+      '💜',
+      '🏳️‍🌈',
+      '✨',
+      '👋',
+      '❤️',
+      '😊',
+      '🔒',
+      '🫂',
+      '🔥',
+      '👏'
+    ];
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
@@ -695,22 +801,25 @@ class _ConversationPageState extends State<ConversationPage> {
           spacing: 12,
           runSpacing: 12,
           alignment: WrapAlignment.center,
-          children: emojis.map((e) => InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              Navigator.of(ctx).pop();
-              _controller.text += e;
-              _onTextChanged();
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Text(e, style: const TextStyle(fontSize: 28)),
-            ),
-          )).toList(),
+          children: emojis
+              .map((e) => InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _controller.text += e;
+                      _onTextChanged();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Text(e, style: const TextStyle(fontSize: 28)),
+                    ),
+                  ))
+              .toList(),
         ),
       ),
     );
   }
+
   void _showMessageOptions(Map<String, dynamic> message, bool own) {
     final messageId = message['id'] as String;
     final content = message['content'] as String? ?? '';
@@ -738,7 +847,8 @@ class _ConversationPageState extends State<ConversationPage> {
               ),
               if (content.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Text(
                     content,
                     maxLines: 2,
@@ -752,7 +862,8 @@ class _ConversationPageState extends State<ConversationPage> {
                 ),
               const Divider(height: 16),
               ListTile(
-                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
+                leading:
+                    const Icon(Icons.copy_rounded, color: AppColors.primary),
                 title: const Text('Copiar texto'),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -766,8 +877,10 @@ class _ConversationPageState extends State<ConversationPage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                title: const Text('Eliminar para mí', style: TextStyle(color: AppColors.error)),
+                leading: const Icon(Icons.delete_outline_rounded,
+                    color: AppColors.error),
+                title: const Text('Eliminar para mí',
+                    style: TextStyle(color: AppColors.error)),
                 subtitle: const Text('Se eliminará únicamente de tu chat'),
                 onTap: () async {
                   Navigator.of(ctx).pop();
@@ -784,12 +897,15 @@ class _ConversationPageState extends State<ConversationPage> {
               ),
               if (own)
                 ListTile(
-                  leading: const Icon(Icons.delete_forever_rounded, color: AppColors.error),
+                  leading: const Icon(Icons.delete_forever_rounded,
+                      color: AppColors.error),
                   title: const Text(
                     'Eliminar para todos',
-                    style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        color: AppColors.error, fontWeight: FontWeight.bold),
                   ),
-                  subtitle: const Text('Se eliminará para ti y para el destinatario'),
+                  subtitle:
+                      const Text('Se eliminará para ti y para el destinatario'),
                   onTap: () async {
                     Navigator.of(ctx).pop();
                     await _service.deleteMessageForEveryone(messageId);
@@ -822,7 +938,8 @@ class _VoiceRecorderModal extends StatefulWidget {
   State<_VoiceRecorderModal> createState() => _VoiceRecorderModalState();
 }
 
-class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTickerProviderStateMixin {
+class _VoiceRecorderModalState extends State<_VoiceRecorderModal>
+    with SingleTickerProviderStateMixin {
   final _recorder = AudioRecorder();
   Timer? _timer;
   int _seconds = 0;
@@ -854,7 +971,9 @@ class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTic
       if (!hasPerm) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Se requiere permiso de micrófono para grabar notas de voz.')),
+            const SnackBar(
+                content: Text(
+                    'Se requiere permiso de micrófono para grabar notas de voz.')),
           );
           Navigator.of(context).pop();
         }
@@ -862,9 +981,11 @@ class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTic
       }
 
       final tempDir = await getTemporaryDirectory();
-      final path = '${tempDir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path =
+          '${tempDir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
+        const RecordConfig(
+            encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
         path: path,
       );
       if (mounted) {
@@ -874,6 +995,9 @@ class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTic
         _timer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (mounted) {
             setState(() => _seconds++);
+            if (_seconds >= ChatService.maxVoiceNoteSeconds) {
+              _stopAndSend();
+            }
           }
         });
       }
@@ -943,23 +1067,27 @@ class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTic
               builder: (ctx, child) => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15 + (_animCtrl.value * 0.15)),
+                  color: AppColors.primary
+                      .withValues(alpha: 0.15 + (_animCtrl.value * 0.15)),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: _animCtrl.value * 0.3),
+                      color: AppColors.primary
+                          .withValues(alpha: _animCtrl.value * 0.3),
                       blurRadius: 16,
                       spreadRadius: 4,
                     ),
                   ],
                 ),
-                child: const Icon(Icons.mic_rounded, color: AppColors.primary, size: 36),
+                child: const Icon(Icons.mic_rounded,
+                    color: AppColors.primary, size: 36),
               ),
             ),
             const SizedBox(height: 14),
             Text(
               _formattedTime,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1),
+              style: const TextStyle(
+                  fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1),
             ),
             const SizedBox(height: 4),
             const Text(
@@ -972,11 +1100,14 @@ class _VoiceRecorderModalState extends State<_VoiceRecorderModal> with SingleTic
               children: [
                 OutlinedButton.icon(
                   onPressed: _stopAndDiscard,
-                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                  label: const Text('Descartar', style: TextStyle(color: AppColors.error)),
+                  icon: const Icon(Icons.delete_outline_rounded,
+                      color: AppColors.error),
+                  label: const Text('Descartar',
+                      style: TextStyle(color: AppColors.error)),
                 ),
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary),
                   onPressed: _stopAndSend,
                   icon: const Icon(Icons.send_rounded),
                   label: const Text('Enviar nota'),
@@ -1062,7 +1193,10 @@ class _AudioPlayerBubbleState extends State<_AudioPlayerBubble> {
       if (_isPlaying) {
         await _player.pause();
       } else {
-        await _player.play(UrlSource(widget.audioUrl));
+        final signedUrl = await ChatService().createSignedMediaUrl(
+          widget.audioUrl,
+        );
+        await _player.play(UrlSource(signedUrl));
       }
     } catch (e) {
       debugPrint('Error playing audio: $e');
@@ -1089,7 +1223,9 @@ class _AudioPlayerBubbleState extends State<_AudioPlayerBubble> {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: widget.own ? Colors.white24 : AppColors.primary.withValues(alpha: 0.2),
+            backgroundColor: widget.own
+                ? Colors.white24
+                : AppColors.primary.withValues(alpha: 0.2),
             child: IconButton(
               iconSize: 22,
               padding: EdgeInsets.zero,
@@ -1109,10 +1245,14 @@ class _AudioPlayerBubbleState extends State<_AudioPlayerBubble> {
                 SliderTheme(
                   data: SliderThemeData(
                     trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-                    activeTrackColor: widget.own ? Colors.white : AppColors.primary,
-                    inactiveTrackColor: widget.own ? Colors.white24 : Colors.white12,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 8),
+                    activeTrackColor:
+                        widget.own ? Colors.white : AppColors.primary,
+                    inactiveTrackColor:
+                        widget.own ? Colors.white24 : Colors.white12,
                     thumbColor: widget.own ? Colors.white : AppColors.primary,
                   ),
                   child: Slider(
@@ -1131,10 +1271,14 @@ class _AudioPlayerBubbleState extends State<_AudioPlayerBubble> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _isPlaying ? _formatDuration(_position) : _formatDuration(_totalDuration),
+                        _isPlaying
+                            ? _formatDuration(_position)
+                            : _formatDuration(_totalDuration),
                         style: TextStyle(
                           fontSize: 11,
-                          color: widget.own ? Colors.white70 : AppColors.textSecondary,
+                          color: widget.own
+                              ? Colors.white70
+                              : AppColors.textSecondary,
                         ),
                       ),
                       Icon(
@@ -1156,6 +1300,7 @@ class _AudioPlayerBubbleState extends State<_AudioPlayerBubble> {
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    super.key,
     required this.messageId,
     required this.content,
     this.type,
@@ -1175,7 +1320,8 @@ class _MessageBubble extends StatelessWidget {
   final String? receiptStatus;
   final VoidCallback onLongPress;
 
-  void _openFullPhoto(BuildContext context, {String? imageUrl, String? imageBase64}) {
+  void _openFullPhoto(BuildContext context,
+      {String? imageUrl, String? imageBase64}) {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -1188,15 +1334,9 @@ class _MessageBubble extends StatelessWidget {
                 minScale: 0.8,
                 maxScale: 4.0,
                 child: imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
+                    ? _PrivateMediaImage(
+                        reference: imageUrl,
                         fit: BoxFit.contain,
-                        loadingBuilder: (_, child, progress) {
-                          if (progress == null) return child;
-                          return const Center(
-                            child: CircularProgressIndicator(color: AppColors.primary),
-                          );
-                        },
                       )
                     : Image.memory(
                         base64Decode(imageBase64!),
@@ -1221,6 +1361,31 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  Future<void> _openDocument(BuildContext context, String reference) async {
+    try {
+      final signedUrl = await ChatService().createSignedMediaUrl(reference);
+      final opened = await launchUrl(
+        Uri.parse(signedUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) throw StateError('No existe una aplicación compatible.');
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo abrir el documento: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '$bytes B';
+  }
+
   @override
   Widget build(BuildContext context) {
     String? imageUrl;
@@ -1228,6 +1393,9 @@ class _MessageBubble extends StatelessWidget {
     String? caption;
     String? audioUrl;
     int? audioDuration;
+    String? fileUrl;
+    String? fileName;
+    int? fileSize;
     String displayContent = content;
 
     if (content.startsWith('{')) {
@@ -1236,14 +1404,21 @@ class _MessageBubble extends StatelessWidget {
         if (decoded.containsKey('audio_url')) {
           audioUrl = decoded['audio_url'] as String?;
           audioDuration = decoded['duration'] as int?;
-        } else if (decoded.containsKey('image_url') || decoded.containsKey('image_base64')) {
+        } else if (decoded.containsKey('image_url') ||
+            decoded.containsKey('image_base64')) {
           imageUrl = decoded['image_url'] as String?;
           imageBase64 = decoded['image_base64'] as String?;
           caption = (decoded['caption'] as String?)?.trim();
+        } else if (decoded.containsKey('file_url')) {
+          fileUrl = decoded['file_url'] as String?;
+          fileName = decoded['file_name'] as String?;
+          fileSize = (decoded['file_size'] as num?)?.toInt();
         }
       } catch (_) {}
     } else if (content.contains('[IMAGE_URL]')) {
-      final clean = content.replaceAll('📷 [IMAGE_URL]', '').replaceAll('[IMAGE_URL]', '');
+      final clean = content
+          .replaceAll('📷 [IMAGE_URL]', '')
+          .replaceAll('[IMAGE_URL]', '');
       final parts = clean.split('|||');
       imageUrl = parts[0].trim();
       if (parts.length > 1) caption = parts[1].trim();
@@ -1256,12 +1431,13 @@ class _MessageBubble extends StatelessWidget {
     }
 
     final hasImage = (imageUrl != null && imageUrl.isNotEmpty) ||
-                     (imageBase64 != null && imageBase64.isNotEmpty);
+        (imageBase64 != null && imageBase64.isNotEmpty);
     final hasAudio = (audioUrl != null && audioUrl.isNotEmpty);
+    final hasFile = fileUrl != null && fileUrl.isNotEmpty;
 
     final cleanCaption = (caption != null && caption.isNotEmpty)
         ? caption
-        : (hasImage || hasAudio ? '' : displayContent);
+        : (hasImage || hasAudio || hasFile ? '' : displayContent);
 
     return Align(
       alignment: own ? Alignment.centerRight : Alignment.centerLeft,
@@ -1286,31 +1462,16 @@ class _MessageBubble extends StatelessWidget {
             children: [
               if (hasImage) ...[
                 GestureDetector(
-                  onTap: () => _openFullPhoto(context, imageUrl: imageUrl, imageBase64: imageBase64),
+                  onTap: () => _openFullPhoto(context,
+                      imageUrl: imageUrl, imageBase64: imageBase64),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: imageUrl != null && imageUrl.isNotEmpty
-                        ? Image.network(
-                            imageUrl,
+                        ? _PrivateMediaImage(
+                            reference: imageUrl,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             height: 220,
-                            loadingBuilder: (ctx, child, progress) {
-                              if (progress == null) return child;
-                              return Container(
-                                height: 220,
-                                color: Colors.black26,
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              );
-                            },
-                            errorBuilder: (_, __, ___) => const Center(
-                              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
-                            ),
                           )
                         : Image.memory(
                             base64Decode(imageBase64!),
@@ -1318,20 +1479,64 @@ class _MessageBubble extends StatelessWidget {
                             width: double.infinity,
                             height: 220,
                             errorBuilder: (_, __, ___) => const Center(
-                              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 40),
+                              child: Icon(Icons.broken_image_rounded,
+                                  color: Colors.white54, size: 40),
                             ),
                           ),
                   ),
                 ),
                 if (cleanCaption.isNotEmpty) const SizedBox(height: 6),
               ],
-              if (hasAudio && audioUrl != null) ...[
+              if (hasAudio) ...[
                 _AudioPlayerBubble(
                   audioUrl: audioUrl,
                   durationSeconds: audioDuration ?? 0,
                   own: own,
                 ),
               ],
+              if (hasFile)
+                InkWell(
+                  onTap: () => _openDocument(context, fileUrl!),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 260,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.insert_drive_file_rounded, size: 34),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                fileName ?? 'Documento',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (fileSize != null)
+                                Text(
+                                  _formatFileSize(fileSize),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.open_in_new_rounded, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
               if (cleanCaption.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1380,6 +1585,222 @@ class _MessageBubble extends StatelessWidget {
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+}
+
+class _PrivateMediaImage extends StatefulWidget {
+  const _PrivateMediaImage({
+    required this.reference,
+    required this.fit,
+    this.width,
+    this.height,
+  });
+
+  final String reference;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+
+  @override
+  State<_PrivateMediaImage> createState() => _PrivateMediaImageState();
+}
+
+class _PrivateMediaImageState extends State<_PrivateMediaImage> {
+  late Future<String> _signedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _signedUrl = ChatService().createSignedMediaUrl(widget.reference);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PrivateMediaImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reference != widget.reference) {
+      _signedUrl = ChatService().createSignedMediaUrl(widget.reference);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _signedUrl,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Icon(
+              Icons.broken_image_rounded,
+              color: Colors.white54,
+              size: 40,
+            ),
+          );
+        }
+        final url = snapshot.data;
+        if (url == null) {
+          return SizedBox(
+            width: widget.width,
+            height: widget.height ?? 120,
+            child: const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            ),
+          );
+        }
+        return Image.network(
+          url,
+          fit: widget.fit,
+          width: widget.width,
+          height: widget.height,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(
+              Icons.broken_image_rounded,
+              color: Colors.white54,
+              size: 40,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ImageSendPreview extends StatefulWidget {
+  const _ImageSendPreview({
+    required this.imagePath,
+    required this.initialCaption,
+  });
+
+  final String imagePath;
+  final String initialCaption;
+
+  @override
+  State<_ImageSendPreview> createState() => _ImageSendPreviewState();
+}
+
+class _ImageSendPreviewState extends State<_ImageSendPreview> {
+  late final TextEditingController _captionController;
+  bool _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _captionController = TextEditingController(text: widget.initialCaption);
+  }
+
+  @override
+  void dispose() {
+    _captionController.dispose();
+    super.dispose();
+  }
+
+  void _close([String? caption]) {
+    if (_closing) return;
+    setState(() => _closing = true);
+    Navigator.of(context).pop(caption);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_closing,
+      child: Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: Image.file(
+                      File(widget.imagePath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Text(
+                        'No se pudo mostrar la imagen.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                left: 8,
+                child: CircleAvatar(
+                  backgroundColor: Colors.black54,
+                  child: IconButton(
+                    tooltip: 'Cancelar',
+                    icon: const Icon(Icons.close_rounded),
+                    color: Colors.white,
+                    onPressed: _closing ? null : _close,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 16,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _captionController,
+                        enabled: !_closing,
+                        maxLength: ChatService.maxCaptionCharacters,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          hintText: 'Añade un comentario...',
+                          hintStyle: const TextStyle(
+                            color: AppColors.textSecondary,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.surfaceRaised.withValues(
+                            alpha: 0.94,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(28),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    InkWell(
+                      onTap: _closing
+                          ? null
+                          : () => _close(_captionController.text.trim()),
+                      borderRadius: BorderRadius.circular(28),
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 120),
+                        opacity: _closing ? 0.55 : 1,
+                        child: Container(
+                          width: 54,
+                          height: 54,
+                          decoration: const BoxDecoration(
+                            gradient: AppColors.brandGradient,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

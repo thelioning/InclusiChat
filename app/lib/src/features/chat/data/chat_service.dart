@@ -1,6 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ConversationSummary {
@@ -93,10 +93,15 @@ class UserProfileData {
 
 class ChatService {
   ChatService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+      : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
-  static final currentUserProfileNotifier = ValueNotifier<UserProfileData?>(null);
+  static const maxTextCharacters = 4000;
+  static const maxCaptionCharacters = 1000;
+  static const maxVoiceNoteSeconds = 600;
+  static const maxMediaBytes = 15 * 1024 * 1024;
+  static final currentUserProfileNotifier =
+      ValueNotifier<UserProfileData?>(null);
 
   String get _userId {
     final id = _client.auth.currentUser?.id;
@@ -107,16 +112,15 @@ class ChatService {
   String get currentUserId => _userId;
 
   Future<UserProfileData> loadUserProfile() async {
-    final row = await _client
-        .from('profiles')
-        .select()
-        .eq('id', _userId)
-        .maybeSingle();
+    final row =
+        await _client.from('profiles').select().eq('id', _userId).maybeSingle();
 
     if (row == null) {
       final user = _client.auth.currentUser;
-      final rawName = user?.userMetadata?['display_name'] as String? ?? 'Usuario';
-      final rawUsername = user?.userMetadata?['username'] as String? ?? 'user_${_userId.substring(0, 6)}';
+      final rawName =
+          user?.userMetadata?['display_name'] as String? ?? 'Usuario';
+      final rawUsername = user?.userMetadata?['username'] as String? ??
+          'user_${_userId.substring(0, 6)}';
       final fallbackProfile = UserProfileData(
         id: _userId,
         displayName: rawName,
@@ -178,21 +182,27 @@ class ChatService {
     try {
       final membershipRows = await _client
           .from('conversation_participants')
-          .select('conversation_id,left_at')
+          .select('conversation_id,left_at,cleared_at')
           .eq('user_id', _userId);
-      
-      final ids = (membershipRows as List)
+
+      final activeMemberships = (membershipRows as List)
           .where((row) => row['left_at'] == null)
+          .toList();
+      final ids = activeMemberships
           .map<String>((row) => row['conversation_id'].toString())
           .toSet()
           .toList();
+      final clearedAtByConversation = <String, DateTime?>{
+        for (final row in activeMemberships)
+          row['conversation_id'].toString(): row['cleared_at'] == null
+              ? null
+              : DateTime.tryParse(row['cleared_at'].toString()),
+      };
 
       if (ids.isEmpty) return const [];
 
-      final conversationRows = await _client
-          .from('conversations')
-          .select()
-          .inFilter('id', ids);
+      final conversationRows =
+          await _client.from('conversations').select().inFilter('id', ids);
 
       final participantRows = await _client
           .from('conversation_participants')
@@ -228,24 +238,8 @@ class ChatService {
         }
       }
 
-      List<dynamic> messageRows = [];
-      try {
-        final mRes = await _client
-            .from('messages')
-            .select('id,conversation_id,sender_id,content,created_at,metadata,is_deleted')
-            .inFilter('conversation_id', ids)
-            .order('created_at', ascending: false);
-        messageRows = (mRes as List);
-      } catch (_) {
-        try {
-          final mRes = await _client
-              .from('messages')
-              .select('id,conversation_id,sender_id,content,created_at')
-              .inFilter('conversation_id', ids)
-              .order('created_at', ascending: false);
-          messageRows = (mRes as List);
-        } catch (_) {}
-      }
+      final messageRows = (await _client
+          .rpc('get_conversation_message_summaries')) as List<dynamic>;
 
       final visibleMessageRows = messageRows.where((row) {
         if (row['is_deleted'] == true) return false;
@@ -260,6 +254,8 @@ class ChatService {
       final latestMessage = <String, String?>{};
       final latestMessageSender = <String, String?>{};
       final latestMessageId = <String, String?>{};
+      final latestReceiptStatus = <String, String?>{};
+      final unreadByConversation = <String, int>{};
 
       for (final row in visibleMessageRows) {
         final cId = row['conversation_id'].toString();
@@ -274,9 +270,12 @@ class ChatService {
                 final minutes = dur ~/ 60;
                 final seconds = (dur % 60).toString().padLeft(2, '0');
                 displayContent = '🎤 Nota de voz ($minutes:$seconds)';
-              } else if (decoded.containsKey('image_url') || decoded.containsKey('image_base64')) {
+              } else if (decoded.containsKey('image_url') ||
+                  decoded.containsKey('image_base64')) {
                 final cap = (decoded['caption'] as String?)?.trim() ?? '';
                 displayContent = cap.isNotEmpty ? '📷 $cap' : '📷 Foto';
+              } else if (decoded.containsKey('file_url')) {
+                displayContent = '📄 ${decoded['file_name'] ?? 'Documento'}';
               }
             } catch (_) {
               displayContent = rawContent;
@@ -292,74 +291,9 @@ class ChatService {
           latestMessage[cId] = displayContent;
           latestMessageSender[cId] = row['sender_id']?.toString();
           latestMessageId[cId] = row['id']?.toString();
+          latestReceiptStatus[cId] = row['receipt_status']?.toString();
         }
-      }
-
-      // Obtener recibos de mis últimos mensajes enviados para saber si fueron entregados o leídos
-      final myLatestMessageIds = latestMessageSender.entries
-          .where((e) => e.value == _userId && latestMessageId[e.key] != null)
-          .map((e) => latestMessageId[e.key]!)
-          .toList();
-
-      final myLatestReceipts = <String, String>{};
-      if (myLatestMessageIds.isNotEmpty) {
-        try {
-          final myReceiptRows = await _client
-              .from('message_receipts')
-              .select('message_id,status')
-              .neq('user_id', _userId)
-              .inFilter('message_id', myLatestMessageIds);
-          for (final r in (myReceiptRows as List)) {
-            final mId = r['message_id'].toString();
-            final st = r['status'].toString();
-            if (st == 'read' || myLatestReceipts[mId] == null) {
-              myLatestReceipts[mId] = st;
-            }
-          }
-        } catch (_) {}
-      }
-
-      final incomingMessageIds = visibleMessageRows
-          .where((row) => row['sender_id'] != _userId)
-          .map<String>((row) => row['id'].toString())
-          .toList();
-
-      final receiptRows = incomingMessageIds.isEmpty
-          ? <Map<String, dynamic>>[]
-          : await _client
-              .from('message_receipts')
-              .select('message_id,status')
-              .eq('user_id', _userId)
-              .inFilter('message_id', incomingMessageIds);
-
-      final knownReceiptIds = (receiptRows as List)
-          .map<String>((row) => row['message_id'].toString())
-          .toSet();
-
-      // Registrar automáticamente como entregados los mensajes recibidos en este dispositivo
-      final unreceivedIds = incomingMessageIds.where((id) => !knownReceiptIds.contains(id)).toList();
-      if (unreceivedIds.isNotEmpty) {
-        for (final mId in unreceivedIds) {
-          markMessageDelivered(mId);
-        }
-      }
-
-      final readMessageIds = (receiptRows as List)
-          .where((row) => row['status'] == 'read')
-          .map<String>((row) => row['message_id'].toString())
-          .toSet();
-
-      final unreadByConversation = <String, int>{};
-      for (final row in visibleMessageRows) {
-        final messageId = row['id'].toString();
-        if (row['sender_id'] != _userId && !readMessageIds.contains(messageId)) {
-          final conversationId = row['conversation_id'].toString();
-          unreadByConversation.update(
-            conversationId,
-            (count) => count + 1,
-            ifAbsent: () => 1,
-          );
-        }
+        unreadByConversation[cId] = (row['unread_count'] as num?)?.toInt() ?? 0;
       }
 
       final results = (conversationRows as List).map((row) {
@@ -382,9 +316,8 @@ class ChatService {
 
         final isMine = latestMessageSender[id] == _userId;
         final lMsgId = latestMessageId[id];
-        final receiptStatus = isMine && lMsgId != null
-            ? (myLatestReceipts[lMsgId] ?? 'sent')
-            : null;
+        final receiptStatus =
+            isMine && lMsgId != null ? latestReceiptStatus[id] ?? 'sent' : null;
 
         return ConversationSummary(
           id: id,
@@ -397,6 +330,9 @@ class ChatService {
           unreadCount: unreadByConversation[id] ?? 0,
           lastActivityAt: activityDate,
         );
+      }).where((summary) {
+        return clearedAtByConversation[summary.id] == null ||
+            summary.lastMessage != null;
       }).toList();
 
       results.sort((a, b) => b.lastActivityAt.compareTo(a.lastActivityAt));
@@ -476,7 +412,8 @@ class ChatService {
     try {
       final profiles = await _client
           .from('profiles')
-          .select('id,display_name,username,avatar_url,bio,pronouns,is_verified')
+          .select(
+              'id,display_name,username,avatar_url,bio,pronouns,is_verified')
           .inFilter('id', allIds.toList())
           .order('display_name');
 
@@ -484,9 +421,10 @@ class ChatService {
         final id = row['id'] as String;
         return ContactProfile(
           id: id,
-          displayName: (row['display_name'] as String?)?.trim().isNotEmpty == true
-              ? row['display_name'] as String
-              : 'Usuario de InclusiChat',
+          displayName:
+              (row['display_name'] as String?)?.trim().isNotEmpty == true
+                  ? row['display_name'] as String
+                  : 'Usuario de InclusiChat',
           username: row['username'] as String?,
           avatarUrl: row['avatar_url'] as String?,
           bio: row['bio'] as String?,
@@ -510,13 +448,15 @@ class ChatService {
         params: {'query_text': cleanQuery},
       );
       if (rpcResults is List) {
-        return rpcResults.map((r) => ContactProfile(
-          id: r['id'] as String,
-          displayName: r['display_name'] as String? ?? 'Usuario',
-          username: r['username'] as String?,
-          avatarUrl: r['avatar_url'] as String?,
-          isVerified: r['is_verified'] as bool? ?? false,
-        )).toList();
+        return rpcResults
+            .map((r) => ContactProfile(
+                  id: r['id'] as String,
+                  displayName: r['display_name'] as String? ?? 'Usuario',
+                  username: r['username'] as String?,
+                  avatarUrl: r['avatar_url'] as String?,
+                  isVerified: r['is_verified'] as bool? ?? false,
+                ))
+            .toList();
       }
     } catch (_) {
       // Fallback a consulta directa si la RPC aún no está creada
@@ -526,19 +466,22 @@ class ChatService {
           .neq('id', _userId)
           .or('username.ilike.%$cleanQuery%,display_name.ilike.%$cleanQuery%')
           .limit(15);
-      return (rows as List).map((r) => ContactProfile(
-        id: r['id'] as String,
-        displayName: r['display_name'] as String? ?? 'Usuario',
-        username: r['username'] as String?,
-        avatarUrl: r['avatar_url'] as String?,
-        isVerified: r['is_verified'] as bool? ?? false,
-      )).toList();
+      return (rows as List)
+          .map((r) => ContactProfile(
+                id: r['id'] as String,
+                displayName: r['display_name'] as String? ?? 'Usuario',
+                username: r['username'] as String?,
+                avatarUrl: r['avatar_url'] as String?,
+                isVerified: r['is_verified'] as bool? ?? false,
+              ))
+          .toList();
     }
     return const [];
   }
 
   Future<Map<String, dynamic>> sendContactRequest(String targetUsername) async {
-    final cleanUsername = targetUsername.trim().toLowerCase().replaceAll('@', '');
+    final cleanUsername =
+        targetUsername.trim().toLowerCase().replaceAll('@', '');
     if (cleanUsername.isEmpty) {
       return {'success': false, 'message': 'Escribe un alias válido.'};
     }
@@ -567,12 +510,16 @@ class ChatService {
           .limit(1);
 
       if ((targetRows as List).isEmpty) {
-        return {'success': false, 'message': 'Usuario @$cleanUsername no encontrado.'};
+        return {
+          'success': false,
+          'message': 'Usuario @$cleanUsername no encontrado.'
+        };
       }
 
       final target = targetRows.first;
       final targetId = target['id'] as String;
-      final targetUName = (target['username'] as String? ?? cleanUsername).replaceAll('@', '');
+      final targetUName =
+          (target['username'] as String? ?? cleanUsername).replaceAll('@', '');
 
       if (targetId == _userId) {
         return {'success': false, 'message': 'No puedes agregarte a ti mismo.'};
@@ -587,7 +534,10 @@ class ChatService {
           .maybeSingle();
 
       if (existingContact != null) {
-        return {'success': false, 'message': 'Este usuario ya está en tus contactos.'};
+        return {
+          'success': false,
+          'message': 'Este usuario ya está en tus contactos.'
+        };
       }
 
       // 2. Verificar si ya existe una solicitud registrada entre ambos
@@ -601,11 +551,22 @@ class ChatService {
         final status = existingReq['status'] as String? ?? 'pending';
         final senderId = existingReq['sender_id'] as String;
         if (status == 'accepted') {
-          return {'success': false, 'message': '@$targetUName ya forma parte de tus contactos.'};
+          return {
+            'success': false,
+            'message': '@$targetUName ya forma parte de tus contactos.'
+          };
         } else if (senderId == _userId) {
-          return {'success': false, 'message': 'Ya enviaste una solicitud a @$targetUName. Está pendiente de aprobación.'};
+          return {
+            'success': false,
+            'message':
+                'Ya enviaste una solicitud a @$targetUName. Está pendiente de aprobación.'
+          };
         } else {
-          return {'success': false, 'message': '@$targetUName ya te envió una solicitud. Revisa la sección de solicitudes para aceptarla.'};
+          return {
+            'success': false,
+            'message':
+                '@$targetUName ya te envió una solicitud. Revisa la sección de solicitudes para aceptarla.'
+          };
         }
       }
 
@@ -621,8 +582,16 @@ class ChatService {
         'message': 'Solicitud enviada a @$targetUName',
       };
     } catch (e) {
-      final cleanErr = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
-      return {'success': false, 'message': cleanErr.isNotEmpty ? cleanErr : 'No se pudo enviar la solicitud.'};
+      final cleanErr = e
+          .toString()
+          .replaceAll('Exception:', '')
+          .replaceAll('PostgrestException', '')
+          .trim();
+      return {
+        'success': false,
+        'message':
+            cleanErr.isNotEmpty ? cleanErr : 'No se pudo enviar la solicitud.'
+      };
     }
   }
 
@@ -637,7 +606,9 @@ class ChatService {
     if ((rows as List).isEmpty) return const [];
 
     final otherIds = rows
-        .map<String>((r) => (r['sender_id'] == _userId ? r['receiver_id'] : r['sender_id']) as String)
+        .map<String>((r) => (r['sender_id'] == _userId
+            ? r['receiver_id']
+            : r['sender_id']) as String)
         .toSet()
         .toList();
 
@@ -659,11 +630,13 @@ class ChatService {
 
     return rows.map((r) {
       final isIncoming = r['receiver_id'] == _userId;
-      final otherId = isIncoming ? r['sender_id'] as String : r['receiver_id'] as String;
-      final profile = profileMap[otherId] ?? ContactProfile(
-        id: otherId,
-        displayName: 'Usuario de InclusiChat',
-      );
+      final otherId =
+          isIncoming ? r['sender_id'] as String : r['receiver_id'] as String;
+      final profile = profileMap[otherId] ??
+          ContactProfile(
+            id: otherId,
+            displayName: 'Usuario de InclusiChat',
+          );
 
       return ContactRequestItem(
         id: r['id'] as String,
@@ -752,60 +725,17 @@ class ChatService {
       if (result != null && result.toString().isNotEmpty) {
         return result.toString();
       }
-    } catch (_) {}
-
-    try {
-      final myParts = await _client
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', _userId)
-          .isFilter('left_at', null);
-
-      final myConvIds = (myParts as List)
-          .map<String>((r) => r['conversation_id'] as String)
-          .toList();
-
-      if (myConvIds.isNotEmpty) {
-        final otherParts = await _client
-            .from('conversation_participants')
-            .select('conversation_id')
-            .eq('user_id', otherUserId)
-            .inFilter('conversation_id', myConvIds)
-            .isFilter('left_at', null)
-            .limit(1);
-
-        if ((otherParts as List).isNotEmpty) {
-          return otherParts.first['conversation_id'] as String;
-        }
-      }
-
-      final sortedUsers = [_userId, otherUserId]..sort();
-      final pairKey = '${sortedUsers[0]}:${sortedUsers[1]}';
-
-      final conv = await _client.from('conversations').insert({
-        'type': 'direct',
-        'created_by': _userId,
-        'direct_pair_key': pairKey,
-      }).select('id').single();
-
-      final convId = conv['id'] as String;
-      await _client.from('conversation_participants').insert([
-        {'conversation_id': convId, 'user_id': _userId, 'role': 'admin'},
-        {'conversation_id': convId, 'user_id': otherUserId, 'role': 'member'},
-      ]);
-
-      try {
-        await _client.from('contacts').upsert({
-          'user_id': _userId,
-          'contact_user_id': otherUserId,
-          'circle_category': 'general',
-        });
-      } catch (_) {}
-
-      return convId;
+      throw const PostgrestException(
+        message: 'La base de datos no devolvio la conversacion.',
+      );
     } catch (e) {
-      final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
-      throw Exception(clean.isNotEmpty ? clean : 'Error al conectar con el usuario');
+      final clean = e
+          .toString()
+          .replaceAll('Exception:', '')
+          .replaceAll('PostgrestException', '')
+          .trim();
+      throw Exception(
+          clean.isNotEmpty ? clean : 'Error al conectar con el usuario');
     }
   }
 
@@ -813,11 +743,15 @@ class ChatService {
     try {
       final rows = await _client
           .from('messages')
-          .select('id,conversation_id,sender_id,type,content,created_at,metadata,is_deleted')
+          .select(
+              'id,conversation_id,sender_id,type,content,created_at,metadata,is_deleted')
           .eq('conversation_id', conversationId)
           .eq('is_deleted', false)
-          .order('created_at', ascending: true);
-      return List<Map<String, dynamic>>.from(rows as List).where((row) {
+          .order('created_at', ascending: false)
+          .limit(200);
+      return List<Map<String, dynamic>>.from(rows as List)
+          .reversed
+          .where((row) {
         if (row['is_deleted'] == true) return false;
         final meta = row['metadata'];
         if (meta is Map && meta['deleted_for'] is List) {
@@ -832,8 +766,9 @@ class ChatService {
             .from('messages')
             .select('id,conversation_id,sender_id,type,content,created_at')
             .eq('conversation_id', conversationId)
-            .order('created_at', ascending: true);
-        return List<Map<String, dynamic>>.from(rows as List);
+            .order('created_at', ascending: false)
+            .limit(200);
+        return List<Map<String, dynamic>>.from(rows as List).reversed.toList();
       } catch (_) {
         return const [];
       }
@@ -841,26 +776,66 @@ class ChatService {
   }
 
   Stream<List<Map<String, dynamic>>> watchMessages(String conversationId) {
-    return _client
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('conversation_id', conversationId)
-        .order('created_at')
-        .map((rows) => rows.where((row) {
-          if (row['is_deleted'] == true) return false;
-          final meta = row['metadata'];
-          if (meta is Map && meta['deleted_for'] is List) {
-            final deletedList = meta['deleted_for'] as List;
-            if (deletedList.contains(_userId)) return false;
-          }
-          return true;
-        }).toList());
+    return Stream.fromFuture(_conversationClearedAt(conversationId))
+        .asyncExpand((clearedAt) {
+      return _client
+          .from('messages')
+          .stream(primaryKey: ['id'])
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: false)
+          .limit(200)
+          .map((rows) {
+            final visibleRows = rows.where((row) {
+              if (row['is_deleted'] == true) return false;
+              if (clearedAt != null) {
+                final createdAt =
+                    DateTime.tryParse(row['created_at'].toString());
+                if (createdAt == null || !createdAt.isAfter(clearedAt)) {
+                  return false;
+                }
+              }
+              final meta = row['metadata'];
+              if (meta is Map && meta['deleted_for'] is List) {
+                final deletedList = meta['deleted_for'] as List;
+                if (deletedList.contains(_userId)) return false;
+              }
+              return true;
+            }).toList();
+            return visibleRows.reversed.toList();
+          });
+    });
   }
 
-  Stream<List<Map<String, dynamic>>> watchReceipts() {
+  Future<DateTime?> _conversationClearedAt(String conversationId) async {
+    final row = await _client
+        .from('conversation_participants')
+        .select('cleared_at')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', _userId)
+        .maybeSingle();
+    final value = row?['cleared_at'];
+    return value == null ? null : DateTime.tryParse(value.toString());
+  }
+
+  Future<void> clearConversationForMe(String conversationId) async {
+    await _client.rpc(
+      'clear_conversation_for_me',
+      params: {'target_conversation_id': conversationId},
+    );
+  }
+
+  Stream<List<Map<String, dynamic>>> watchReceipts(
+    Iterable<String> messageIds,
+  ) {
+    final ids = messageIds.toSet().take(200).toList(growable: false);
+    if (ids.isEmpty) {
+      return Stream.value(const <Map<String, dynamic>>[]);
+    }
     return _client
         .from('message_receipts')
-        .stream(primaryKey: ['message_id', 'user_id']);
+        .stream(primaryKey: ['message_id', 'user_id'])
+        .inFilter('message_id', ids)
+        .limit(ids.length * 8);
   }
 
   Future<void> markMessageDelivered(String messageId) async {
@@ -897,6 +872,10 @@ class ChatService {
   }) async {
     final text = content.trim();
     if (text.isEmpty) return;
+    if (text.length > maxTextCharacters) {
+      throw ArgumentError(
+          'El mensaje supera los $maxTextCharacters caracteres.');
+    }
 
     await _client.from('messages').insert({
       'conversation_id': conversationId,
@@ -920,40 +899,37 @@ class ChatService {
   }
 
   Future<void> deleteMessageForMe(String messageId) async {
-    try {
-      final row = await _client
-          .from('messages')
-          .select('metadata')
-          .eq('id', messageId)
-          .maybeSingle();
-      final currentMeta = Map<String, dynamic>.from((row?['metadata'] as Map?) ?? {});
-      final deletedFor = List<String>.from((currentMeta['deleted_for'] as List?) ?? []);
-      if (!deletedFor.contains(_userId)) {
-        deletedFor.add(_userId);
-        currentMeta['deleted_for'] = deletedFor;
-        await _client.from('messages').update({
-          'metadata': currentMeta,
-        }).eq('id', messageId);
-      }
-    } catch (_) {}
+    final deleted = await _client.rpc(
+      'delete_message_for_me',
+      params: {'target_message_id': messageId},
+    );
+    if (deleted != true) {
+      throw const PostgrestException(
+        message: 'No se pudo ocultar el mensaje para este usuario.',
+      );
+    }
   }
 
-  Future<String> uploadImageFile(String filePath) async {
-    try {
-      final uri = Uri.parse('https://catbox.moe/user/api.php');
-      final request = http.MultipartRequest('POST', uri)
-        ..fields['reqtype'] = 'fileupload'
-        ..files.add(await http.MultipartFile.fromPath('fileToUpload', filePath));
+  static const _mediaBucket = 'chat-media';
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-      if (response.statusCode == 200) {
-        final body = response.body.trim();
-        if (body.startsWith('http')) {
-          return body;
-        }
+  Future<String> uploadImageFile(
+    String filePath, {
+    required String conversationId,
+  }) async {
+    try {
+      final file = File(filePath);
+      if (await file.length() > maxMediaBytes) {
+        throw ArgumentError('La imagen supera el límite de 15 MB.');
       }
-      throw Exception('No se pudo subir la imagen al servidor');
+      final extension = _safeExtension(filePath, fallback: 'jpg');
+      final objectPath =
+          '$conversationId/$_userId/${DateTime.now().microsecondsSinceEpoch}.$extension';
+      await _client.storage.from(_mediaBucket).upload(
+            objectPath,
+            file,
+            fileOptions: const FileOptions(upsert: false),
+          );
+      return objectPath;
     } catch (e) {
       debugPrint('Upload error: $e');
       rethrow;
@@ -966,17 +942,27 @@ class ChatService {
     String? caption,
   }) async {
     final cleanCaption = caption?.trim() ?? '';
+    if (cleanCaption.length > maxCaptionCharacters) {
+      throw ArgumentError(
+        'El texto de la foto supera los $maxCaptionCharacters caracteres.',
+      );
+    }
     final payload = jsonEncode({
       'image_url': imageUrl,
       'caption': cleanCaption,
     });
 
-    await _client.from('messages').insert({
-      'conversation_id': conversationId,
-      'sender_id': _userId,
-      'type': 'image',
-      'content': payload,
-    });
+    try {
+      await _client.from('messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': _userId,
+        'type': 'image',
+        'content': payload,
+      });
+    } catch (_) {
+      await _client.storage.from(_mediaBucket).remove([imageUrl]);
+      rethrow;
+    }
 
     try {
       await _client.from('conversations').update({
@@ -991,14 +977,16 @@ class ChatService {
     required String imagePath,
     String? caption,
   }) async {
-    final imageUrl = await uploadImageFile(imagePath);
-
     final targetConvIds = <String>{...conversationIds};
     for (final uId in contactUserIds) {
       final convId = await createDirectConversation(uId);
       targetConvIds.add(convId);
     }
     for (final convId in targetConvIds) {
+      final imageUrl = await uploadImageFile(
+        imagePath,
+        conversationId: convId,
+      );
       await sendImageMessage(
         conversationId: convId,
         imageUrl: imageUrl,
@@ -1007,26 +995,143 @@ class ChatService {
     }
   }
 
-  Future<String> uploadAudioFile(String filePath) async {
+  Future<String> uploadAudioFile(
+    String filePath, {
+    required String conversationId,
+  }) async {
     try {
-      final uri = Uri.parse('https://catbox.moe/user/api.php');
-      final request = http.MultipartRequest('POST', uri)
-        ..fields['reqtype'] = 'fileupload'
-        ..files.add(await http.MultipartFile.fromPath('fileToUpload', filePath));
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-      if (response.statusCode == 200) {
-        final body = response.body.trim();
-        if (body.startsWith('http')) {
-          return body;
-        }
+      final file = File(filePath);
+      if (await file.length() > maxMediaBytes) {
+        throw ArgumentError('La nota de voz supera el límite de 15 MB.');
       }
-      throw Exception('No se pudo subir la nota de voz');
+      final extension = _safeExtension(filePath, fallback: 'm4a');
+      final objectPath =
+          '$conversationId/$_userId/${DateTime.now().microsecondsSinceEpoch}.$extension';
+      await _client.storage.from(_mediaBucket).upload(
+            objectPath,
+            file,
+            fileOptions: const FileOptions(upsert: false),
+          );
+      return objectPath;
     } catch (e) {
       debugPrint('Audio upload error: $e');
       rethrow;
     }
+  }
+
+  Future<String> uploadDocumentFile(
+    String filePath, {
+    required String conversationId,
+  }) async {
+    final file = File(filePath);
+    if (await file.length() > maxMediaBytes) {
+      throw ArgumentError('El documento supera el límite de 15 MB.');
+    }
+    final extension = _safeExtension(filePath, fallback: 'bin');
+    const allowedExtensions = {
+      'pdf',
+      'txt',
+      'csv',
+      'zip',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
+      'ppt',
+      'pptx',
+    };
+    if (!allowedExtensions.contains(extension)) {
+      throw ArgumentError('Este tipo de documento no está permitido.');
+    }
+    final objectPath =
+        '$conversationId/$_userId/${DateTime.now().microsecondsSinceEpoch}.$extension';
+    await _client.storage.from(_mediaBucket).upload(
+          objectPath,
+          file,
+          fileOptions: FileOptions(
+            upsert: false,
+            contentType: _documentMimeType(extension),
+          ),
+        );
+    return objectPath;
+  }
+
+  Future<void> sendDocumentMessage({
+    required String conversationId,
+    required String fileUrl,
+    required String fileName,
+    required int fileSize,
+  }) async {
+    final safeName = fileName.trim();
+    if (safeName.isEmpty || safeName.length > 255) {
+      await _client.storage.from(_mediaBucket).remove([fileUrl]);
+      throw ArgumentError('El nombre del documento no es válido.');
+    }
+    final payload = jsonEncode({
+      'file_url': fileUrl,
+      'file_name': safeName,
+      'file_size': fileSize,
+    });
+    try {
+      await _client.from('messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': _userId,
+        'type': 'file',
+        'content': payload,
+      });
+    } catch (_) {
+      await _client.storage.from(_mediaBucket).remove([fileUrl]);
+      rethrow;
+    }
+  }
+
+  String _documentMimeType(String extension) => switch (extension) {
+        'pdf' => 'application/pdf',
+        'txt' => 'text/plain',
+        'csv' => 'text/csv',
+        'zip' => 'application/zip',
+        'doc' => 'application/msword',
+        'docx' =>
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls' => 'application/vnd.ms-excel',
+        'xlsx' =>
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt' => 'application/vnd.ms-powerpoint',
+        'pptx' =>
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        _ => 'application/octet-stream',
+      };
+
+  String _safeExtension(String filePath, {required String fallback}) {
+    if (!filePath.contains('.')) return fallback;
+    final extension = filePath
+        .split('.')
+        .last
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return extension.isEmpty ? fallback : extension;
+  }
+
+  Future<String> createSignedMediaUrl(String reference) async {
+    final uri = Uri.tryParse(reference);
+    if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+      throw const FormatException(
+        'Referencia multimedia externa no permitida.',
+      );
+    }
+    final segments = reference.split('/');
+    final uuid = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    );
+    if (segments.length != 3 ||
+        !uuid.hasMatch(segments[0]) ||
+        !uuid.hasMatch(segments[1]) ||
+        segments[2].isEmpty ||
+        segments[2].contains('..')) {
+      throw const FormatException('Referencia multimedia inválida.');
+    }
+    return _client.storage.from(_mediaBucket).createSignedUrl(reference, 600);
   }
 
   Future<void> sendAudioMessage({
@@ -1034,17 +1139,27 @@ class ChatService {
     required String audioUrl,
     required int durationSeconds,
   }) async {
+    if (durationSeconds < 1 || durationSeconds > maxVoiceNoteSeconds) {
+      throw ArgumentError(
+        'La nota de voz debe durar entre 1 y $maxVoiceNoteSeconds segundos.',
+      );
+    }
     final payload = jsonEncode({
       'audio_url': audioUrl,
       'duration': durationSeconds,
     });
 
-    await _client.from('messages').insert({
-      'conversation_id': conversationId,
-      'sender_id': _userId,
-      'type': 'audio',
-      'content': payload,
-    });
+    try {
+      await _client.from('messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': _userId,
+        'type': 'audio',
+        'content': payload,
+      });
+    } catch (_) {
+      await _client.storage.from(_mediaBucket).remove([audioUrl]);
+      rethrow;
+    }
 
     try {
       await _client.from('conversations').update({

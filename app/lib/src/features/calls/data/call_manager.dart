@@ -18,6 +18,7 @@ class CallManager {
     String? callerId,
     String? conversationId,
     String callType = 'audio',
+    bool acceptedFromSystem = false,
   }) {
     if (isCallActive || currentCallId == callId) return;
 
@@ -41,6 +42,7 @@ class CallManager {
           conversationId: conversationId,
           callType: callType == 'video' ? CallType.video : CallType.audio,
           isIncoming: true,
+          acceptedFromSystem: acceptedFromSystem,
         ),
       ),
     )

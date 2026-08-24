@@ -1,0 +1,5 @@
+# Copy this file to android/key.properties. Never commit key.properties or the keystore.
+storePassword=replace-with-secure-secret
+keyPassword=replace-with-secure-secret
+keyAlias=inclusichat-release
+storeFile=C:/secure/location/inclusichat-release.jks

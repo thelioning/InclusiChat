@@ -116,7 +116,8 @@ class _QuickPhotoPreviewPageState extends State<QuickPhotoPreviewPage> {
                                 ),
                                 border: InputBorder.none,
                                 isDense: true,
-                                contentPadding: EdgeInsets.symmetric(vertical: 14),
+                                contentPadding:
+                                    EdgeInsets.symmetric(vertical: 14),
                               ),
                             ),
                           ),

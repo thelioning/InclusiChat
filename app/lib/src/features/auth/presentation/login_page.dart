@@ -62,14 +62,16 @@ class _LoginPageState extends State<LoginPage> {
         final enteredEmail = _emailController.text.trim();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Este usuario o correo no existe o la contraseña es incorrecta.'),
+            content: const Text(
+                'Este usuario o correo no existe o la contraseña es incorrecta.'),
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 6),
             action: SnackBarAction(
               label: 'Crear cuenta',
               textColor: Colors.white,
               onPressed: () async {
-                final registeredEmail = await Navigator.of(context).push<String>(
+                final registeredEmail =
+                    await Navigator.of(context).push<String>(
                   MaterialPageRoute<String>(
                     builder: (_) => RegisterPage(initialEmail: enteredEmail),
                   ),
@@ -104,7 +106,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _forgotPassword() async {
-    final resetEmailController = TextEditingController(text: _emailController.text.trim());
+    final resetEmailController =
+        TextEditingController(text: _emailController.text.trim());
     final emailToSend = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -153,7 +156,8 @@ class _LoginPageState extends State<LoginPage> {
     if (emailError != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(emailError), backgroundColor: AppColors.warning),
+          SnackBar(
+              content: Text(emailError), backgroundColor: AppColors.warning),
         );
       }
       return;
@@ -165,7 +169,8 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Enlace de recuperación enviado. Revisa tu bandeja de entrada.'),
+          content: Text(
+              'Enlace de recuperación enviado. Revisa tu bandeja de entrada.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -206,7 +211,8 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Enviamos un correo nuevo. Usa solamente el más reciente.'),
+          content:
+              Text('Enviamos un correo nuevo. Usa solamente el más reciente.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -326,9 +332,8 @@ class _LoginPageState extends State<LoginPage> {
                               child: const Text('¿Olvidaste tu contraseña?'),
                             ),
                             TextButton(
-                              onPressed: _isSubmitting
-                                  ? null
-                                  : _resendConfirmation,
+                              onPressed:
+                                  _isSubmitting ? null : _resendConfirmation,
                               child: const Text(
                                 'Reenviar correo de confirmación',
                               ),
@@ -384,12 +389,16 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           TextButton(
                             onPressed: () async {
-                              final registeredEmail = await Navigator.of(context).push<String>(
+                              final registeredEmail =
+                                  await Navigator.of(context).push<String>(
                                 MaterialPageRoute<String>(
-                                  builder: (_) => RegisterPage(initialEmail: _emailController.text.trim()),
+                                  builder: (_) => RegisterPage(
+                                      initialEmail:
+                                          _emailController.text.trim()),
                                 ),
                               );
-                              if (registeredEmail != null && registeredEmail.isNotEmpty) {
+                              if (registeredEmail != null &&
+                                  registeredEmail.isNotEmpty) {
                                 _emailController.text = registeredEmail;
                                 _passwordController.clear();
                               }

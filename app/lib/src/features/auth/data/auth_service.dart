@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
   AuthService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+      : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -45,7 +45,11 @@ class AuthService {
   }
 
   Future<List<String>> generateUsernameSuggestions(String baseUsername) async {
-    final clean = baseUsername.trim().toLowerCase().replaceAll('@', '').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    final clean = baseUsername
+        .trim()
+        .toLowerCase()
+        .replaceAll('@', '')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
     if (clean.isEmpty) return [];
 
     final suggestions = <String>[];

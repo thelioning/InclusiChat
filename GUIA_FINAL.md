@@ -27,13 +27,13 @@ InclusiChat es una aplicación de mensajería privada, inclusiva y con arquitect
   4. Digita tu nuevo PIN de 4 a 6 dígitos y confírmalo.
   5. El nuevo PIN se guardará permanentemente en tu teléfono para que solo tú sepas cómo desbloquearla.
 
-### 4. Llamadas y Videollamadas Cifradas
-* Dentro de cualquier conversación, pulsa el icono de **Teléfono** (Llamada de voz) o **Cámara** (Videollamada).
-* Cuentas con controles en pantalla para silenciar micrófono, cambiar a altavoz, encender/apagar cámara y temporizador de llamada activa.
+### 4. Vista previa de llamadas
+* Los controles actuales permiten probar señalización y estados de llamada.
+* La versión 1.5.1 todavía no transporta audio o video y no debe considerarse una implementación VoIP ni E2EE.
 
 ### 5. Adjuntos y Notas de Voz Seguras
-* **Multimedia:** Pulsa el icono de clip para enviar fotos, documentos seguros o ubicación.
-* **Notas de Audio:** Toca el icono de micrófono para abrir el grabador de notas de voz cifradas de extremo a extremo.
+* **Multimedia:** Las imágenes nuevas se almacenan en un bucket privado de Supabase y se entregan mediante enlaces temporales.
+* **Notas de Audio:** Las notas nuevas usan el mismo almacenamiento privado. Esta versión todavía no implementa cifrado de extremo a extremo.
 
 ### 6. Eliminación Definitiva de Cuenta (Derecho al Olvido)
 * Si decides no seguir utilizando la app, ve a **Ajustes** -> **Seguridad y blindaje** -> **`Eliminar mi cuenta y borrar mis datos`**.

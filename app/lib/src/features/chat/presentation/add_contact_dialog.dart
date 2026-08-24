@@ -105,13 +105,15 @@ class _AddContactDialogState extends State<AddContactDialog> {
                       color: AppColors.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primary, size: 20),
+                    child: const Icon(Icons.person_add_alt_1_rounded,
+                        color: AppColors.primary, size: 20),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
                       'Agregar por @alias',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                     ),
                   ),
                   IconButton(
@@ -124,7 +126,8 @@ class _AddContactDialogState extends State<AddContactDialog> {
               const SizedBox(height: 12),
               const Text(
                 'Escribe el alias de usuario único (@usuario) para conectar de forma privada.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 16),
               Row(
@@ -146,13 +149,15 @@ class _AddContactDialogState extends State<AddContactDialog> {
                   FilledButton(
                     onPressed: _isSearching ? null : _performSearch,
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       backgroundColor: AppColors.primary,
                     ),
                     child: _isSearching
                         ? const SizedBox.square(
                             dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
                           )
                         : const Text('Buscar'),
                   ),
@@ -165,7 +170,8 @@ class _AddContactDialogState extends State<AddContactDialog> {
                   child: Text(
                     _errorMessage!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -190,7 +196,8 @@ class _AddContactDialogState extends State<AddContactDialog> {
                           _isSearching
                               ? 'Buscando usuarios...'
                               : 'Escribe un alias para buscar o invita a tus amigos.',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 13),
                         ),
                       )
                     : ListView.separated(
@@ -208,7 +215,8 @@ class _AddContactDialogState extends State<AddContactDialog> {
                                   ? NetworkImage(profile.avatarUrl!)
                                   : null,
                               child: profile.avatarUrl == null
-                                  ? Text(profile.displayName.characters.first.toUpperCase())
+                                  ? Text(profile.displayName.characters.first
+                                      .toUpperCase())
                                   : null,
                             ),
                             title: Row(
@@ -218,23 +226,29 @@ class _AddContactDialogState extends State<AddContactDialog> {
                                     profile.displayName,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
                                   ),
                                 ),
                                 if (profile.isVerified) ...[
                                   const SizedBox(width: 4),
-                                  const Icon(Icons.verified_rounded, size: 16, color: AppColors.primary),
+                                  const Icon(Icons.verified_rounded,
+                                      size: 16, color: AppColors.primary),
                                 ],
                               ],
                             ),
-                            subtitle: Text('@${profile.username ?? ''} • Toca para chatear'),
+                            subtitle: Text(
+                                '@${profile.username ?? ''} • Toca para chatear'),
                             trailing: OutlinedButton.icon(
-                              onPressed: _isSending ? null : () => _sendRequest(profile),
+                              onPressed: _isSending
+                                  ? null
+                                  : () => _sendRequest(profile),
                               icon: const Icon(Icons.send_rounded, size: 16),
                               label: const Text('Conectar'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
+                                side:
+                                    const BorderSide(color: AppColors.primary),
                               ),
                             ),
                           );

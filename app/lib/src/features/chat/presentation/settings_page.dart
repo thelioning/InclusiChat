@@ -48,11 +48,13 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final hasDefaultPin = CamouflageService.instance.isDefaultPin;
-    final hasMissingAvatar = _profile?.avatarUrl == null || _profile!.avatarUrl!.isEmpty;
+    final hasMissingAvatar =
+        _profile?.avatarUrl == null || _profile!.avatarUrl!.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ajustes', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Ajustes',
+            style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -64,30 +66,40 @@ class _SettingsPageState extends State<SettingsPage> {
                   InkWell(
                     onTap: () async {
                       await Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
+                        MaterialPageRoute<void>(
+                            builder: (_) => const ProfileSettingsPage()),
                       );
                       _loadProfile();
                     },
                     child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceRaised,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
                           CircleAvatar(
                             radius: 30,
                             backgroundColor: AppColors.secondary,
-                            backgroundImage: _profile!.avatarUrl != null && _profile!.avatarUrl!.isNotEmpty
+                            backgroundImage: _profile!.avatarUrl != null &&
+                                    _profile!.avatarUrl!.isNotEmpty
                                 ? NetworkImage(_profile!.avatarUrl!)
                                 : null,
-                            child: _profile!.avatarUrl == null || _profile!.avatarUrl!.isEmpty
+                            child: _profile!.avatarUrl == null ||
+                                    _profile!.avatarUrl!.isEmpty
                                 ? Text(
-                                    _profile!.displayName.isNotEmpty ? _profile!.displayName[0].toUpperCase() : '?',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.white),
+                                    _profile!.displayName.isNotEmpty
+                                        ? _profile!.displayName[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 24,
+                                        color: Colors.white),
                                   )
                                 : null,
                           ),
@@ -98,18 +110,26 @@ class _SettingsPageState extends State<SettingsPage> {
                               children: [
                                 Text(
                                   _profile!.displayName,
-                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   '@${_profile!.username}',
-                                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                                  style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13),
                                 ),
-                                if (_profile!.bio != null && _profile!.bio!.isNotEmpty) ...[
+                                if (_profile!.bio != null &&
+                                    _profile!.bio!.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   Text(
                                     _profile!.bio!,
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                    style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -117,7 +137,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textSecondary),
                         ],
                       ),
                     ),
@@ -133,7 +154,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   badgeCount: hasMissingAvatar ? 1 : null,
                   onTap: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const ProfileSettingsPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const ProfileSettingsPage()),
                     );
                     _loadProfile();
                   },
@@ -142,12 +164,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.visibility_off_outlined,
                   title: 'Privacidad y camuflaje',
                   subtitle: hasDefaultPin
-                      ? '⚠️ PIN secreto por defecto 1234 (Toca para cambiar)'
+                      ? '⚠️ Configura un PIN para habilitar el camuflaje'
                       : 'Modo señuelo, botón de pánico y PIN secreto',
                   badgeCount: hasDefaultPin ? 1 : null,
                   onTap: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const CamouflageSettingsPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const CamouflageSettingsPage()),
                     );
                     _loadProfile();
                   },
@@ -158,7 +181,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: 'Aislamiento de datos, permisos y sesiones',
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const SecuritySettingsPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const SecuritySettingsPage()),
                     );
                   },
                 ),
@@ -168,7 +192,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: 'Alertas discretas de mensajes y llamadas',
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notificaciones discretas activas por defecto.')),
+                      const SnackBar(
+                          content: Text(
+                              'Notificaciones discretas activas por defecto.')),
                     );
                   },
                 ),
@@ -177,7 +203,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   iconColor: const Color(0xFF25D366),
                   title: 'Invitar amigos por WhatsApp',
                   subtitle: 'Comparte tu @alias para conectar en InclusiChat',
-                  onTap: () => InviteService.inviteViaWhatsApp(customUsername: _profile?.username),
+                  onTap: () => InviteService.inviteViaWhatsApp(
+                      customUsername: _profile?.username),
                 ),
                 _SettingsTile(
                   icon: Icons.menu_book_rounded,
@@ -185,7 +212,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: 'Aprende cómo usar el alias, camuflaje y llamadas',
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const UserGuidePage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const UserGuidePage()),
                     );
                   },
                 ),
@@ -193,15 +221,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.system_update_rounded,
                   title: 'Buscar actualizaciones',
                   subtitle: 'Comprobar si hay una nueva versión disponible',
-                  onTap: () => UpdateService.checkForUpdates(context, forceShow: true),
+                  onTap: () =>
+                      UpdateService.checkForUpdates(context, forceShow: true),
                 ),
                 _SettingsTile(
                   icon: Icons.info_outline_rounded,
                   title: 'Acerca de InclusiChat',
-                  subtitle: 'Versión ${AppConfig.version}, autor, derechos y licencias',
+                  subtitle:
+                      'Versión ${AppConfig.version}, autor, derechos y licencias',
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const AboutPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const AboutPage()),
                     );
                   },
                 ),
@@ -216,14 +247,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       context: context,
                       builder: (ctx) => AlertDialog(
                         title: const Text('Cerrar sesión'),
-                        content: const Text('¿Deseas cerrar tu sesión en este dispositivo?'),
+                        content: const Text(
+                            '¿Deseas cerrar tu sesión en este dispositivo?'),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(ctx).pop(false),
                             child: const Text('Cancelar'),
                           ),
                           FilledButton(
-                            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                            style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.error),
                             onPressed: () => Navigator.of(ctx).pop(true),
                             child: const Text('Cerrar sesión'),
                           ),
@@ -279,7 +312,8 @@ class _SettingsTile extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           CircleAvatar(
-            backgroundColor: (iconColor ?? AppColors.primary).withValues(alpha: 0.12),
+            backgroundColor:
+                (iconColor ?? AppColors.primary).withValues(alpha: 0.12),
             child: Icon(icon, color: iconColor ?? AppColors.primary, size: 22),
           ),
           if (badgeCount != null && badgeCount! > 0)
@@ -295,7 +329,10 @@ class _SettingsTile extends StatelessWidget {
                 constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Text(
                   '$badgeCount',
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -307,7 +344,8 @@ class _SettingsTile extends StatelessWidget {
         subtitle,
         style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
       ),
-      trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+      trailing: const Icon(Icons.chevron_right_rounded,
+          color: AppColors.textSecondary),
       onTap: onTap,
     );
   }

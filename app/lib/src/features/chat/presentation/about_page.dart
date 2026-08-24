@@ -70,11 +70,13 @@ class AboutPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     AppConfig.fullVersionString,
@@ -101,7 +103,8 @@ class AboutPage extends StatelessWidget {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.copyright_rounded, size: 20, color: AppColors.primary),
+                          Icon(Icons.copyright_rounded,
+                              size: 20, color: AppColors.primary),
                           SizedBox(width: 10),
                           Text(
                             'Propiedad y Derechos de Autor',
@@ -166,48 +169,63 @@ class AboutPage extends StatelessWidget {
                   child: Column(
                     children: [
                       ListTile(
-                        leading: const Icon(Icons.language_rounded, color: AppColors.primary),
+                        leading: const Icon(Icons.language_rounded,
+                            color: AppColors.primary),
                         title: const Text('Sitio Web Oficial'),
                         subtitle: const Text('inclusichat.org'),
-                        trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                        trailing:
+                            const Icon(Icons.open_in_new_rounded, size: 18),
                         onTap: () => _openUrl(context, _websiteUrl),
                       ),
-                      const Divider(height: 1, indent: 56, color: Colors.white10),
+                      const Divider(
+                          height: 1, indent: 56, color: Colors.white10),
                       ListTile(
-                        leading: const Icon(Icons.privacy_tip_outlined, color: AppColors.primary),
+                        leading: const Icon(Icons.privacy_tip_outlined,
+                            color: AppColors.primary),
                         title: const Text('Política de Privacidad'),
                         subtitle: const Text('Protección y derechos de datos'),
-                        trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                        trailing:
+                            const Icon(Icons.open_in_new_rounded, size: 18),
                         onTap: () => _openUrl(context, _privacyUrl),
                       ),
-                      const Divider(height: 1, indent: 56, color: Colors.white10),
+                      const Divider(
+                          height: 1, indent: 56, color: Colors.white10),
                       ListTile(
-                        leading: const Icon(Icons.description_outlined, color: AppColors.primary),
+                        leading: const Icon(Icons.description_outlined,
+                            color: AppColors.primary),
                         title: const Text('Términos de Servicio'),
                         subtitle: const Text('Normas de uso y convivencia'),
-                        trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                        trailing:
+                            const Icon(Icons.open_in_new_rounded, size: 18),
                         onTap: () => _openUrl(context, _termsUrl),
                       ),
-                      const Divider(height: 1, indent: 56, color: Colors.white10),
+                      const Divider(
+                          height: 1, indent: 56, color: Colors.white10),
                       ListTile(
-                        leading: const Icon(Icons.code_rounded, color: AppColors.primary),
+                        leading: const Icon(Icons.code_rounded,
+                            color: AppColors.primary),
                         title: const Text('Código Fuente en GitHub'),
                         subtitle: const Text('thelioning/InclusiChat'),
-                        trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                        trailing:
+                            const Icon(Icons.open_in_new_rounded, size: 18),
                         onTap: () => _openUrl(context, _githubUrl),
                       ),
-                      const Divider(height: 1, indent: 56, color: Colors.white10),
+                      const Divider(
+                          height: 1, indent: 56, color: Colors.white10),
                       ListTile(
-                        leading: const Icon(Icons.workspace_premium_outlined, color: AppColors.primary),
+                        leading: const Icon(Icons.workspace_premium_outlined,
+                            color: AppColors.primary),
                         title: const Text('Licencias de Código Abierto'),
-                        subtitle: const Text('Bibliotecas y software de terceros'),
+                        subtitle:
+                            const Text('Bibliotecas y software de terceros'),
                         trailing: const Icon(Icons.chevron_right_rounded),
                         onTap: () {
                           showLicensePage(
                             context: context,
                             applicationName: AppConfig.appName,
                             applicationVersion: AppConfig.version,
-                            applicationLegalese: '© 2026 ${AppConfig.appName} & ${AppConfig.organization} (${AppConfig.authorName})',
+                            applicationLegalese:
+                                '© 2026 ${AppConfig.appName} & ${AppConfig.organization} (${AppConfig.authorName})',
                           );
                         },
                       ),

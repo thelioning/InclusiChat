@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -51,16 +50,31 @@ class CallService {
 
   String? get currentUserId => _client.auth.currentUser?.id;
 
+  Future<void> _ensureFreshSession() async {
+    final session = _client.auth.currentSession;
+    if (session == null) throw const AuthException('Sesión no disponible');
+
+    final expiresAt = session.expiresAt;
+    final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (expiresAt != null && expiresAt <= nowSeconds + 30) {
+      final response = await _client.auth.refreshSession();
+      if (response.session == null) {
+        throw const AuthException('No se pudo renovar la sesión');
+      }
+    }
+  }
+
   /// Inicia una llamada enviando un mensaje de señal 'start' en la conversación
   Future<String> startCall({
     required String conversationId,
     required String receiverId,
     required String callType,
+    required String callId,
   }) async {
+    await _ensureFreshSession();
     final uid = currentUserId;
     if (uid == null) throw Exception('No autenticado');
-
-    final callId = 'call_${DateTime.now().millisecondsSinceEpoch}';
+    if (callId.isEmpty) throw ArgumentError.value(callId, 'callId');
 
     // Obtener nombre del usuario actual
     String callerName = 'Usuario';
@@ -88,6 +102,20 @@ class CallService {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       },
     });
+
+    final pushResponse = await _client.functions.invoke(
+      'send-call-notification',
+      body: {
+        'call_id': callId,
+        'conversation_id': conversationId,
+        'receiver_id': receiverId,
+        'call_type': callType,
+      },
+    );
+    final pushData = pushResponse.data;
+    if (pushData is! Map || (pushData['delivered'] as num? ?? 0) < 1) {
+      throw Exception('No hay un dispositivo disponible para recibir la llamada');
+    }
 
     try {
       await _client.from('conversations').update({
@@ -148,6 +176,7 @@ class CallService {
     required String callId,
     required int durationSeconds,
     required bool wasConnected,
+    required String callType,
   }) async {
     final uid = currentUserId;
     if (uid == null) return;
@@ -170,6 +199,7 @@ class CallService {
         'call_id': callId,
         'duration': durationSeconds,
         'status': wasConnected ? 'completed' : 'missed',
+        'call_type': callType,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       },
     });
@@ -190,9 +220,13 @@ class CallService {
 
       for (final row in rows as List) {
         final meta = row['metadata'];
-        if (meta is Map && meta['call_signal'] == true && meta['call_id'] == callId) {
+        if (meta is Map &&
+            meta['call_signal'] == true &&
+            meta['call_id'] == callId) {
           final action = meta['action'] as String?;
-          if (action != null) return action; // 'start', 'accept', 'reject', 'end'
+          if (action != null) {
+            return action; // 'start', 'accept', 'reject', 'end'
+          }
         }
       }
     } catch (_) {}
@@ -232,14 +266,18 @@ class CallService {
 
       for (final row in rows as List) {
         final meta = row['metadata'];
-        if (meta is Map && meta['call_signal'] == true && meta['action'] == 'start') {
+        if (meta is Map &&
+            meta['call_signal'] == true &&
+            meta['action'] == 'start') {
           final callId = meta['call_id'] as String?;
           final createdAt = DateTime.tryParse(row['created_at'].toString());
           if (callId != null && createdAt != null) {
-            final diffSeconds = now.toUtc().difference(createdAt.toUtc()).inSeconds;
+            final diffSeconds =
+                now.toUtc().difference(createdAt.toUtc()).inSeconds;
             if (diffSeconds >= 0 && diffSeconds <= 35) {
               // Verificar si ya fue aceptada, rechazada o terminada
-              final hasEndedOrAnswered = await _isCallAlreadyHandled(row['conversation_id'] as String, callId);
+              final hasEndedOrAnswered = await _isCallAlreadyHandled(
+                  row['conversation_id'] as String, callId);
               if (!hasEndedOrAnswered) {
                 return {
                   'call_id': callId,
@@ -260,7 +298,8 @@ class CallService {
     return null;
   }
 
-  Future<bool> _isCallAlreadyHandled(String conversationId, String callId) async {
+  Future<bool> _isCallAlreadyHandled(
+      String conversationId, String callId) async {
     try {
       final rows = await _client
           .from('messages')
@@ -321,10 +360,13 @@ class CallService {
 
       for (final row in rows as List) {
         final meta = row['metadata'];
-        if (meta is Map && meta['call_signal'] == true && meta['action'] == 'end') {
+        if (meta is Map &&
+            meta['call_signal'] == true &&
+            meta['action'] == 'end') {
           final isOut = row['sender_id'] == uid;
           final senderProfile = row['sender'] as Map?;
-          final senderName = (senderProfile?['display_name'] as String?) ?? 'Contacto';
+          final senderName =
+              (senderProfile?['display_name'] as String?) ?? 'Contacto';
           final senderAvatar = senderProfile?['avatar_url'] as String?;
           final senderId = row['sender_id'].toString();
 
@@ -336,7 +378,8 @@ class CallService {
             callType: meta['call_type'] as String? ?? 'audio',
             status: meta['status'] as String? ?? 'completed',
             durationSeconds: meta['duration'] as int? ?? 0,
-            startedAt: DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now(),
+            startedAt: DateTime.tryParse(row['created_at'].toString()) ??
+                DateTime.now(),
             isOutgoing: isOut,
             otherUserName: senderName,
             otherUserAvatar: senderAvatar,

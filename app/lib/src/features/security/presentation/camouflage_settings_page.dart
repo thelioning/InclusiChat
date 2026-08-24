@@ -21,7 +21,7 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
   void initState() {
     super.initState();
     _isActive = _service.isCamouflageFeatureActive;
-    _pin = _service.pin;
+    _pin = '';
   }
 
   @override
@@ -123,7 +123,7 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDefault = _pin == '1234';
+    final isDefault = !_service.hasSecurePin && _pin.isEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Privacidad y camuflaje'),
@@ -141,19 +141,23 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 28),
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Colors.amber, size: 28),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'PIN por defecto (1234)',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Colors.amber),
+                          'Configura un PIN seguro',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: Colors.amber),
                         ),
                         const SizedBox(height: 2),
                         const Text(
-                          'Por tu seguridad, cámbialo por un PIN de 4 dígitos propio que solo tú recuerdes.',
+                          'El modo camuflaje permanece desactivado hasta que configures un PIN de 4 a 6 dígitos.',
                           style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         const SizedBox(height: 8),
@@ -161,11 +165,14 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.amber,
                             foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
                             minimumSize: Size.zero,
                           ),
                           onPressed: _showChangePinDialog,
-                          child: const Text('Personalizar mi PIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          child: const Text('Personalizar mi PIN',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
                       ],
                     ),
@@ -180,7 +187,8 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
             decoration: BoxDecoration(
               color: AppColors.surfaceRaised,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -190,7 +198,8 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
                     color: AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.visibility_off_rounded, color: AppColors.primary, size: 28),
+                  child: const Icon(Icons.visibility_off_rounded,
+                      color: AppColors.primary, size: 28),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -199,12 +208,14 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
                     children: [
                       Text(
                         'Modo Camuflaje Seguro',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 16),
                       ),
                       SizedBox(height: 4),
                       Text(
                         'Disfraza la app como una calculadora completamente funcional ante situaciones de revisión obligatoria.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -214,8 +225,10 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
           ),
           const SizedBox(height: 24),
           SwitchListTile(
-            title: const Text('Activar modo camuflaje', style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text('Habilita la calculadora señuelo y el botón de pánico.'),
+            title: const Text('Activar modo camuflaje',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+                'Habilita la calculadora señuelo y el botón de pánico.'),
             value: _isActive,
             onChanged: (val) {
               setState(() => _isActive = val);
@@ -231,22 +244,31 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
                 if (isDefault) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.error,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: const Text('1',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
                   ),
                 ],
               ],
             ),
             subtitle: Text(
-              isDefault ? '⚠️ Por defecto (1234) - Toca para cambiar' : 'Personalizado (${"•" * _pin.length})',
+              isDefault
+                  ? 'Sin PIN configurado'
+                  : 'PIN protegido (${"•" * (_pin.isNotEmpty ? _pin.length : _service.pinLength)})',
               style: TextStyle(color: isDefault ? Colors.amberAccent : null),
             ),
             trailing: FilledButton(
-              style: isDefault ? FilledButton.styleFrom(backgroundColor: AppColors.error) : null,
+              style: isDefault
+                  ? FilledButton.styleFrom(backgroundColor: AppColors.error)
+                  : null,
               onPressed: _showChangePinDialog,
               child: const Text('Cambiar'),
             ),
@@ -264,10 +286,14 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
                 _service.triggerCamouflage();
                 Navigator.of(context).pop();
               },
-              icon: const Icon(Icons.warning_amber_rounded, color: Colors.white),
+              icon:
+                  const Icon(Icons.warning_amber_rounded, color: Colors.white),
               label: const Text(
                 'Activar camuflaje ahora (Prueba)',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
@@ -278,7 +304,7 @@ class _CamouflageSettingsPageState extends State<CamouflageSettingsPage> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Al activarlo, la app mostrará una Calculadora real. Para volver a InclusiChat, escribe tu PIN secreto (ej: 1234) en la calculadora y presiona el botón "=".',
+            'Al activarlo, la app mostrará una calculadora. Para volver a InclusiChat, escribe tu PIN secreto y presiona el botón "=".',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),

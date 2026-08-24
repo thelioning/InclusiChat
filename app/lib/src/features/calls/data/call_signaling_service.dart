@@ -21,14 +21,15 @@ class IncomingCallEvent {
 }
 
 class CallSignalingService {
-  static final CallSignalingService _instance = CallSignalingService._internal();
+  static final CallSignalingService _instance =
+      CallSignalingService._internal();
   factory CallSignalingService() => _instance;
   CallSignalingService._internal();
 
   final SupabaseClient _client = Supabase.instance.client;
   RealtimeChannel? _userCallChannel;
   RealtimeChannel? _activeRoomChannel;
-  
+
   Function(IncomingCallEvent)? onIncomingCall;
   Function(String callId)? onCallAccepted;
   Function(String callId)? onCallRejected;
@@ -56,23 +57,24 @@ class CallSignalingService {
 
     _userCallChannel!
         .onBroadcast(
-          event: 'incoming_call',
-          callback: (payload) {
-            debugPrint('📞 [Realtime Broadcast] Incoming call signal: $payload');
-            final event = IncomingCallEvent(
-              callId: payload['call_id']?.toString() ?? '',
-              callerId: payload['caller_id']?.toString() ?? '',
-              callerName: payload['caller_name']?.toString() ?? 'Contacto',
-              callerAvatar: payload['caller_avatar']?.toString(),
-              callType: payload['call_type']?.toString() ?? 'audio',
-              conversationId: payload['conversation_id']?.toString(),
-            );
-            onIncomingCall?.call(event);
-          },
-        )
+      event: 'incoming_call',
+      callback: (payload) {
+        debugPrint('📞 [Realtime Broadcast] Incoming call signal: $payload');
+        final event = IncomingCallEvent(
+          callId: payload['call_id']?.toString() ?? '',
+          callerId: payload['caller_id']?.toString() ?? '',
+          callerName: payload['caller_name']?.toString() ?? 'Contacto',
+          callerAvatar: payload['caller_avatar']?.toString(),
+          callType: payload['call_type']?.toString() ?? 'audio',
+          conversationId: payload['conversation_id']?.toString(),
+        );
+        onIncomingCall?.call(event);
+      },
+    )
         .subscribe((status, error) {
-          debugPrint('📡 User call channel ($channelName) status: $status, error: $error');
-        });
+      debugPrint(
+          '📡 User call channel ($channelName) status: $status, error: $error');
+    });
   }
 
   /// Conecta a la sala específica de la llamada activa para intercambiar eventos en tiempo real
@@ -119,8 +121,9 @@ class CallSignalingService {
           },
         )
         .subscribe((status, error) {
-          debugPrint('📡 Active Call Room ($roomName) status: $status, error: $error');
-        });
+      debugPrint(
+          '📡 Active Call Room ($roomName) status: $status, error: $error');
+    });
   }
 
   /// Envía la señal de llamada entrante al canal personal del destinatario
@@ -151,7 +154,8 @@ class CallSignalingService {
               'conversation_id': conversationId,
             },
           );
-          debugPrint('🚀 [Broadcast sent] incoming_call to user_call_$receiverId');
+          debugPrint(
+              '🚀 [Broadcast sent] incoming_call to user_call_$receiverId');
         }
       });
     } catch (e) {

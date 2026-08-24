@@ -79,7 +79,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Foto seleccionada. Recuerda pulsar "Guardar cambios".'),
+              content:
+                  Text('Foto seleccionada. Recuerda pulsar "Guardar cambios".'),
               backgroundColor: AppColors.surfaceRaised,
             ),
           );
@@ -168,12 +169,14 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                     children: [
                       Text(
                         'Foto y Avatar Inclusivo',
-                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 19, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Cámara, galería o avatares diversos.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -193,13 +196,15 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                   child: FilledButton.tonalIcon(
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () {
                       Navigator.of(ctx).pop();
                       _pickImage(ImageSource.gallery);
                     },
-                    icon: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+                    icon: const Icon(Icons.photo_library_rounded,
+                        color: AppColors.primary),
                     label: const Text('Galería del móvil'),
                   ),
                 ),
@@ -208,13 +213,15 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                   child: FilledButton.tonalIcon(
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () {
                       Navigator.of(ctx).pop();
                       _pickImage(ImageSource.camera);
                     },
-                    icon: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+                    icon: const Icon(Icons.camera_alt_rounded,
+                        color: AppColors.primary),
                     label: const Text('Tomar foto'),
                   ),
                 ),
@@ -228,7 +235,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               children: [
                 Text(
                   '✊🏾 Avatares Afrodescendientes & Piel Oscura',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.amberAccent),
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.amberAccent),
                 ),
               ],
             ),
@@ -260,7 +270,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               children: [
                 Text(
                   '🌎 Diversidad Latina, Indígena y Global',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -296,8 +309,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                       setState(() => _avatarUrl = null);
                       Navigator.of(ctx).pop();
                     },
-                    icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                    label: const Text('Quitar foto', style: TextStyle(color: AppColors.error)),
+                    icon: const Icon(Icons.delete_outline_rounded,
+                        color: AppColors.error),
+                    label: const Text('Quitar foto',
+                        style: TextStyle(color: AppColors.error)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -333,7 +348,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar')),
           FilledButton(
             onPressed: () {
               final text = urlController.text.trim();
@@ -354,7 +371,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
     setState(() => _isSaving = true);
 
     try {
-      final cleanUsername = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+      final cleanUsername =
+          _usernameController.text.trim().toLowerCase().replaceAll('@', '');
       await _chatService.updateUserProfile(
         displayName: _nameController.text.trim(),
         username: cleanUsername,
@@ -416,13 +434,19 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                     CircleAvatar(
                                       radius: 46,
                                       backgroundColor: AppColors.secondary,
-                                      backgroundImage: _getAvatarProvider(_avatarUrl),
+                                      backgroundImage:
+                                          _getAvatarProvider(_avatarUrl),
                                       child: _avatarUrl == null
                                           ? Text(
                                               _nameController.text.isNotEmpty
-                                                  ? _nameController.text.characters.first.toUpperCase()
+                                                  ? _nameController
+                                                      .text.characters.first
+                                                      .toUpperCase()
                                                   : 'U',
-                                              style: const TextStyle(fontSize: 34, color: Colors.white, fontWeight: FontWeight.bold),
+                                              style: const TextStyle(
+                                                  fontSize: 34,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold),
                                             )
                                           : null,
                                     ),
@@ -435,32 +459,47 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                           color: AppColors.primary,
                                           shape: BoxShape.circle,
                                         ),
-                                        child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                                        child: const Icon(
+                                            Icons.camera_alt_rounded,
+                                            size: 16,
+                                            color: Colors.white),
                                       ),
                                     ),
-                                    if (_avatarUrl == null || _avatarUrl!.isEmpty)
+                                    if (_avatarUrl == null ||
+                                        _avatarUrl!.isEmpty)
                                       Positioned(
                                         top: -2,
                                         right: -2,
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 7, vertical: 2),
                                           decoration: BoxDecoration(
                                             color: AppColors.error,
                                             shape: BoxShape.circle,
-                                            border: Border.all(color: AppColors.surface, width: 2),
+                                            border: Border.all(
+                                                color: AppColors.surface,
+                                                width: 2),
                                           ),
-                                          child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                          child: const Text('1',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold)),
                                         ),
                                       ),
                                   ],
                                 ),
                               ),
-                              if (_avatarUrl == null || _avatarUrl!.isEmpty) ...[
+                              if (_avatarUrl == null ||
+                                  _avatarUrl!.isEmpty) ...[
                                 const SizedBox(height: 10),
                                 TextButton.icon(
                                   onPressed: _showAvatarPicker,
-                                  icon: const Icon(Icons.add_a_photo_outlined, size: 16, color: AppColors.primary),
-                                  label: const Text('Elegir foto o avatar de perfil', style: TextStyle(fontSize: 13)),
+                                  icon: const Icon(Icons.add_a_photo_outlined,
+                                      size: 16, color: AppColors.primary),
+                                  label: const Text(
+                                      'Elegir foto o avatar de perfil',
+                                      style: TextStyle(fontSize: 13)),
                                 ),
                               ],
                             ],
@@ -469,7 +508,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                         const SizedBox(height: 24),
                         TextFormField(
                           controller: _nameController,
-                          validator: (v) => v?.trim().isEmpty == true ? 'El nombre es obligatorio' : null,
+                          validator: (v) => v?.trim().isEmpty == true
+                              ? 'El nombre es obligatorio'
+                              : null,
                           decoration: const InputDecoration(
                             labelText: 'Nombre visible',
                             prefixIcon: Icon(Icons.person_outline_rounded),
@@ -479,19 +520,27 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                         TextFormField(
                           controller: _usernameController,
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'[a-zA-Z0-9_]')),
                           ],
                           validator: (v) {
-                            final u = v?.trim().toLowerCase().replaceAll('@', '') ?? '';
-                            if (u.length < 3) return 'Mínimo 3 caracteres';
-                            if (!RegExp(r'^[a-z0-9_]+$').hasMatch(u)) return 'Solo letras, números y guiones bajos';
+                            final u =
+                                v?.trim().toLowerCase().replaceAll('@', '') ??
+                                    '';
+                            if (u.length < 3) {
+                              return 'Mínimo 3 caracteres';
+                            }
+                            if (!RegExp(r'^[a-z0-9_]+$').hasMatch(u)) {
+                              return 'Solo letras, números y guiones bajos';
+                            }
                             return null;
                           },
                           decoration: const InputDecoration(
                             labelText: 'Alias único (@usuario)',
                             prefixText: '@',
                             prefixIcon: Icon(Icons.alternate_email_rounded),
-                            helperText: 'Tus contactos te encuentran usando este alias.',
+                            helperText:
+                                'Tus contactos te encuentran usando este alias.',
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -518,9 +567,11 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                           const SizedBox(height: 10),
                           const Row(
                             children: [
-                              Icon(Icons.verified_rounded, color: AppColors.primary, size: 20),
+                              Icon(Icons.verified_rounded,
+                                  color: AppColors.primary, size: 20),
                               SizedBox(width: 8),
-                              Text('Cuenta verificada de confianza', style: TextStyle(color: AppColors.primary)),
+                              Text('Cuenta verificada de confianza',
+                                  style: TextStyle(color: AppColors.primary)),
                             ],
                           ),
                         ],
@@ -540,9 +591,13 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                             child: _isSaving
                                 ? const SizedBox.square(
                                     dimension: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white),
                                   )
-                                : const Text('Guardar cambios', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                : const Text('Guardar cambios',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],
@@ -602,7 +657,8 @@ class _AvatarOptionCircle extends StatelessWidget {
               errorBuilder: (context, error, stackTrace) {
                 return Container(
                   color: AppColors.surfaceRaised,
-                  child: const Icon(Icons.person_rounded, color: AppColors.textSecondary),
+                  child: const Icon(Icons.person_rounded,
+                      color: AppColors.textSecondary),
                 );
               },
             ),

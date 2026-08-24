@@ -46,10 +46,15 @@ class _NewConversationPageState extends State<NewConversationPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
+      final clean = e
+          .toString()
+          .replaceAll('Exception:', '')
+          .replaceAll('PostgrestException', '')
+          .trim();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(clean.isNotEmpty ? clean : 'No se pudo iniciar la conversación.'),
+          content: Text(
+              clean.isNotEmpty ? clean : 'No se pudo iniciar la conversación.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -116,13 +121,15 @@ class _NewConversationPageState extends State<NewConversationPage> {
                       const SizedBox(height: 20),
                       const Text(
                         'Inicia tu primera conversación',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         'Busca a tus amigos por su @alias único o invítalos por WhatsApp para comenzar a chatear seguro.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.textSecondary, height: 1.4),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, height: 1.4),
                       ),
                       const SizedBox(height: 24),
                       FilledButton.icon(
@@ -131,13 +138,15 @@ class _NewConversationPageState extends State<NewConversationPage> {
                         label: const Text('Buscar usuario por @alias'),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 12),
                         ),
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: () => InviteService.inviteViaWhatsApp(),
-                        icon: const Icon(Icons.share_rounded, color: Color(0xFF25D366)),
+                        icon: const Icon(Icons.share_rounded,
+                            color: Color(0xFF25D366)),
                         label: const Text('Invitar amigos por WhatsApp'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
@@ -160,13 +169,15 @@ class _NewConversationPageState extends State<NewConversationPage> {
                       color: AppColors.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 20),
+                    child: const Icon(Icons.person_add_rounded,
+                        color: Colors.white, size: 20),
                   ),
                   title: const Text(
                     'Nuevo contacto por @alias',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                   ),
-                  subtitle: const Text('Conectar con personas mediante su alias único'),
+                  subtitle: const Text(
+                      'Conectar con personas mediante su alias único'),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: _showAddContact,
                 ),
@@ -177,7 +188,8 @@ class _NewConversationPageState extends State<NewConversationPage> {
                       color: Color(0xFF25D366),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+                    child: const Icon(Icons.share_rounded,
+                        color: Colors.white, size: 20),
                   ),
                   title: const Text(
                     'Invitar amigos por WhatsApp',
@@ -204,11 +216,16 @@ class _NewConversationPageState extends State<NewConversationPage> {
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: AppColors.secondary,
-                      backgroundImage: contact.avatarUrl != null ? NetworkImage(contact.avatarUrl!) : null,
+                      backgroundImage: contact.avatarUrl != null
+                          ? NetworkImage(contact.avatarUrl!)
+                          : null,
                       child: contact.avatarUrl == null
                           ? Text(
-                              contact.displayName.characters.first.toUpperCase(),
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              contact.displayName.characters.first
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
                             )
                           : null,
                     ),
@@ -230,14 +247,18 @@ class _NewConversationPageState extends State<NewConversationPage> {
                         ],
                       ],
                     ),
-                    subtitle: contact.username == null ? null : Text('@${contact.username}'),
+                    subtitle: contact.username == null
+                        ? null
+                        : Text('@${contact.username}'),
                     trailing: isOpening
                         ? const SizedBox.square(
                             dimension: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
-                    onTap: _openingContactId == null ? () => _open(contact) : null,
+                        : const Icon(Icons.chat_bubble_outline_rounded,
+                            color: AppColors.primary),
+                    onTap:
+                        _openingContactId == null ? () => _open(contact) : null,
                   );
                 }),
               ],

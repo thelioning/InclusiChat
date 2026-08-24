@@ -11,12 +11,14 @@ class UpdateService {
   static bool _hasCheckedThisSession = false;
 
   /// Consulta en segundo plano la última versión disponible en GitHub Releases.
-  static Future<void> checkForUpdates(BuildContext context, {bool forceShow = false}) async {
+  static Future<void> checkForUpdates(BuildContext context,
+      {bool forceShow = false}) async {
     if (_hasCheckedThisSession && !forceShow) return;
     _hasCheckedThisSession = true;
 
     try {
-      final uri = Uri.parse('https://api.github.com/repos/thelioning/InclusiChat/releases/latest');
+      final uri = Uri.parse(
+          'https://api.github.com/repos/thelioning/InclusiChat/releases/latest');
       final response = await http.get(
         uri,
         headers: {'Accept': 'application/vnd.github.v3+json'},
@@ -24,7 +26,8 @@ class UpdateService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final latestTag = (data['tag_name'] as String?)?.replaceAll('v', '').trim() ?? '';
+        final latestTag =
+            (data['tag_name'] as String?)?.replaceAll('v', '').trim() ?? '';
         final releaseNotes = (data['body'] as String?)?.trim() ?? '';
 
         String? apkDownloadUrl;
@@ -38,7 +41,8 @@ class UpdateService {
             }
           }
         }
-        apkDownloadUrl ??= 'https://github.com/thelioning/InclusiChat/releases/latest';
+        apkDownloadUrl ??=
+            'https://github.com/thelioning/InclusiChat/releases/latest';
 
         if (_isVersionNewer(latestTag, currentVersion)) {
           if (context.mounted) {
@@ -52,7 +56,8 @@ class UpdateService {
         } else if (forceShow && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Ya tienes instalada la versión más reciente de InclusiChat (v$currentVersion).'),
+              content: Text(
+                  'Ya tienes instalada la versión más reciente de InclusiChat (v$currentVersion).'),
               backgroundColor: AppColors.primary,
             ),
           );
@@ -65,8 +70,10 @@ class UpdateService {
 
   static bool _isVersionNewer(String latest, String current) {
     if (latest.isEmpty) return false;
-    final latestParts = latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final currentParts = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final latestParts =
+        latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final currentParts =
+        current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
     for (int i = 0; i < latestParts.length && i < currentParts.length; i++) {
       if (latestParts[i] > currentParts[i]) return true;
@@ -94,7 +101,8 @@ class UpdateService {
                 color: AppColors.primary.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.system_update_rounded, color: AppColors.primary, size: 24),
+              child: const Icon(Icons.system_update_rounded,
+                  color: AppColors.primary, size: 24),
             ),
             const SizedBox(width: 12),
             const Expanded(
@@ -117,7 +125,10 @@ class UpdateService {
               const SizedBox(height: 12),
               const Text(
                 'Novedades de esta versión:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textSecondary),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: AppColors.textSecondary),
               ),
               const SizedBox(height: 6),
               Container(
@@ -140,7 +151,8 @@ class UpdateService {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Más tarde', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Más tarde',
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),

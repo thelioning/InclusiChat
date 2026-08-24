@@ -89,7 +89,8 @@ class _ContactsPageState extends State<ContactsPage> {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Ahora estás conectado con ${request.profile.displayName}.'),
+          content:
+              Text('Ahora estás conectado con ${request.profile.displayName}.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -114,7 +115,8 @@ class _ContactsPageState extends State<ContactsPage> {
 
   Future<void> _openChat(ContactProfile contact) async {
     try {
-      final conversationId = await _chatService.createDirectConversation(contact.id);
+      final conversationId =
+          await _chatService.createDirectConversation(contact.id);
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -128,10 +130,15 @@ class _ContactsPageState extends State<ContactsPage> {
       _fetchData(initial: false);
     } catch (e) {
       if (!mounted) return;
-      final clean = e.toString().replaceAll('Exception:', '').replaceAll('PostgrestException', '').trim();
+      final clean = e
+          .toString()
+          .replaceAll('Exception:', '')
+          .replaceAll('PostgrestException', '')
+          .trim();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(clean.isNotEmpty ? clean : 'No se pudo abrir la conversación.'),
+          content: Text(
+              clean.isNotEmpty ? clean : 'No se pudo abrir la conversación.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -143,7 +150,8 @@ class _ContactsPageState extends State<ContactsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar contacto'),
-        content: Text('¿Deseas eliminar a ${contact.displayName} de tus contactos?'),
+        content:
+            Text('¿Deseas eliminar a ${contact.displayName} de tus contactos?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -186,7 +194,8 @@ class _ContactsPageState extends State<ContactsPage> {
                 children: [
                   Expanded(
                     child: TextField(
-                      onChanged: (value) => setState(() => _searchFilter = value.trim().toLowerCase()),
+                      onChanged: (value) => setState(
+                          () => _searchFilter = value.trim().toLowerCase()),
                       decoration: const InputDecoration(
                         hintText: 'Buscar en mis contactos',
                         prefixIcon: Icon(Icons.search_rounded),
@@ -215,7 +224,8 @@ class _ContactsPageState extends State<ContactsPage> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1B2E23),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.35)),
+                border: Border.all(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.35)),
               ),
               child: Row(
                 children: [
@@ -225,7 +235,8 @@ class _ContactsPageState extends State<ContactsPage> {
                       color: Color(0xFF25D366),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
+                    child: const Icon(Icons.share_rounded,
+                        color: Colors.white, size: 18),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -234,7 +245,10 @@ class _ContactsPageState extends State<ContactsPage> {
                       children: [
                         Text(
                           'Invitar amigos por WhatsApp',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.white),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: Colors.white),
                         ),
                         SizedBox(height: 2),
                         Text(
@@ -248,12 +262,15 @@ class _ContactsPageState extends State<ContactsPage> {
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF25D366),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     onPressed: () => InviteService.inviteViaWhatsApp(),
-                    child: const Text('Invitar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: const Text('Invitar',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -277,18 +294,22 @@ class _ContactsPageState extends State<ContactsPage> {
                         decoration: BoxDecoration(
                           color: AppColors.surfaceRaised,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.mail_outline_rounded, color: AppColors.primary, size: 20),
+                                const Icon(Icons.mail_outline_rounded,
+                                    color: AppColors.primary, size: 20),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Solicitudes recibidas (${incoming.length})',
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14),
                                 ),
                               ],
                             ),
@@ -297,7 +318,8 @@ class _ContactsPageState extends State<ContactsPage> {
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: incoming.length,
-                              separatorBuilder: (_, __) => const Divider(height: 12),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 12),
                               itemBuilder: (context, idx) {
                                 final req = incoming[idx];
                                 return Row(
@@ -305,21 +327,29 @@ class _ContactsPageState extends State<ContactsPage> {
                                     CircleAvatar(
                                       radius: 18,
                                       backgroundColor: AppColors.secondary,
-                                      child: Text(req.profile.displayName.characters.first.toUpperCase()),
+                                      child: Text(req
+                                          .profile.displayName.characters.first
+                                          .toUpperCase()),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             req.profile.displayName,
-                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14),
                                           ),
                                           if (req.profile.username != null)
                                             Text(
                                               '@${req.profile.username}',
-                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                              style: const TextStyle(
+                                                  color:
+                                                      AppColors.textSecondary,
+                                                  fontSize: 12),
                                             ),
                                         ],
                                       ),
@@ -327,13 +357,15 @@ class _ContactsPageState extends State<ContactsPage> {
                                     IconButton.filledTonal(
                                       tooltip: 'Aceptar',
                                       onPressed: () => _acceptRequest(req),
-                                      icon: const Icon(Icons.check_rounded, color: AppColors.success, size: 20),
+                                      icon: const Icon(Icons.check_rounded,
+                                          color: AppColors.success, size: 20),
                                     ),
                                     const SizedBox(width: 4),
                                     IconButton.filledTonal(
                                       tooltip: 'Rechazar',
                                       onPressed: () => _rejectRequest(req),
-                                      icon: const Icon(Icons.close_rounded, color: AppColors.error, size: 20),
+                                      icon: const Icon(Icons.close_rounded,
+                                          color: AppColors.error, size: 20),
                                     ),
                                   ],
                                 );
@@ -349,18 +381,23 @@ class _ContactsPageState extends State<ContactsPage> {
                         decoration: BoxDecoration(
                           color: AppColors.surfaceRaised,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color:
+                                  AppColors.secondary.withValues(alpha: 0.3)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.outbox_rounded, color: AppColors.secondary, size: 20),
+                                const Icon(Icons.outbox_rounded,
+                                    color: AppColors.secondary, size: 20),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Solicitudes enviadas (${outgoing.length})',
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14),
                                 ),
                               ],
                             ),
@@ -369,7 +406,8 @@ class _ContactsPageState extends State<ContactsPage> {
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: outgoing.length,
-                              separatorBuilder: (_, __) => const Divider(height: 12),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 12),
                               itemBuilder: (context, idx) {
                                 final req = outgoing[idx];
                                 return Row(
@@ -377,28 +415,38 @@ class _ContactsPageState extends State<ContactsPage> {
                                     CircleAvatar(
                                       radius: 18,
                                       backgroundColor: AppColors.surface,
-                                      child: Text(req.profile.displayName.characters.first.toUpperCase()),
+                                      child: Text(req
+                                          .profile.displayName.characters.first
+                                          .toUpperCase()),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             req.profile.displayName,
-                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14),
                                           ),
                                           if (req.profile.username != null)
                                             Text(
                                               '@${req.profile.username} • Esperando aceptación',
-                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                              style: const TextStyle(
+                                                  color:
+                                                      AppColors.textSecondary,
+                                                  fontSize: 12),
                                             ),
                                         ],
                                       ),
                                     ),
                                     TextButton.icon(
                                       onPressed: () => _openChat(req.profile),
-                                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                                      icon: const Icon(
+                                          Icons.chat_bubble_outline_rounded,
+                                          size: 16),
                                       label: const Text('Chatear'),
                                     ),
                                   ],
@@ -438,126 +486,154 @@ class _ContactsPageState extends State<ContactsPage> {
                 ),
               ),
             )
-          else () {
-            final filtered = _searchFilter.isEmpty
-                ? _contacts
-                : _contacts.where((c) =>
-                    c.displayName.toLowerCase().contains(_searchFilter) ||
-                    (c.username != null && c.username!.toLowerCase().contains(_searchFilter))).toList();
+          else
+            () {
+              final filtered = _searchFilter.isEmpty
+                  ? _contacts
+                  : _contacts
+                      .where((c) =>
+                          c.displayName.toLowerCase().contains(_searchFilter) ||
+                          (c.username != null &&
+                              c.username!
+                                  .toLowerCase()
+                                  .contains(_searchFilter)))
+                      .toList();
 
-            if (filtered.isEmpty) {
-              return SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: const BoxDecoration(
-                            gradient: AppColors.brandGradient,
-                            shape: BoxShape.circle,
+              if (filtered.isEmpty) {
+                return SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.brandGradient,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.people_outline_rounded,
+                                size: 40, color: Colors.white),
                           ),
-                          child: const Icon(Icons.people_outline_rounded, size: 40, color: Colors.white),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          _searchFilter.isEmpty ? 'Tu círculo está esperando' : 'Sin coincidencias',
-                          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _searchFilter.isEmpty
-                              ? 'Agrega personas usando su @alias único para construir tu espacio seguro.'
-                              : 'No se encontraron contactos con "$_searchFilter".',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.textSecondary),
-                        ),
-                        if (_searchFilter.isEmpty) ...[
                           const SizedBox(height: 20),
-                          FilledButton.icon(
-                            onPressed: _showAddContactDialog,
-                            icon: const Icon(Icons.person_add_rounded),
-                            label: const Text('Agregar primer contacto'),
-                            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                          Text(
+                            _searchFilter.isEmpty
+                                ? 'Tu círculo está esperando'
+                                : 'Sin coincidencias',
+                            style: const TextStyle(
+                                fontSize: 19, fontWeight: FontWeight.w700),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            return SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final contact = filtered[index];
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    leading: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: AppColors.secondary,
-                      backgroundImage: contact.avatarUrl != null ? NetworkImage(contact.avatarUrl!) : null,
-                      child: contact.avatarUrl == null
-                          ? Text(
-                              contact.displayName.characters.first.toUpperCase(),
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                            )
-                          : null,
-                    ),
-                    title: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            contact.displayName,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                          const SizedBox(height: 8),
+                          Text(
+                            _searchFilter.isEmpty
+                                ? 'Agrega personas usando su @alias único para construir tu espacio seguro.'
+                                : 'No se encontraron contactos con "$_searchFilter".',
+                            textAlign: TextAlign.center,
+                            style:
+                                const TextStyle(color: AppColors.textSecondary),
                           ),
-                        ),
-                        if (contact.isVerified) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.verified_rounded, size: 16, color: AppColors.primary),
-                        ],
-                      ],
-                    ),
-                    subtitle: contact.username != null ? Text('@${contact.username}') : null,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Mensaje directo',
-                          icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
-                          onPressed: () => _openChat(contact),
-                        ),
-                        PopupMenuButton<String>(
-                          onSelected: (val) {
-                            if (val == 'remove') _confirmRemoveContact(contact);
-                          },
-                          itemBuilder: (ctx) => [
-                            const PopupMenuItem(
-                              value: 'remove',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.person_remove_outlined, color: AppColors.error),
-                                  SizedBox(width: 10),
-                                  Text('Eliminar contacto', style: TextStyle(color: AppColors.error)),
-                                ],
-                              ),
+                          if (_searchFilter.isEmpty) ...[
+                            const SizedBox(height: 20),
+                            FilledButton.icon(
+                              onPressed: _showAddContactDialog,
+                              icon: const Icon(Icons.person_add_rounded),
+                              label: const Text('Agregar primer contacto'),
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary),
                             ),
                           ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    onTap: () => _openChat(contact),
-                  );
-                },
-                childCount: filtered.length,
-              ),
-            );
-          }(),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final contact = filtered[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      leading: CircleAvatar(
+                        radius: 22,
+                        backgroundColor: AppColors.secondary,
+                        backgroundImage: contact.avatarUrl != null
+                            ? NetworkImage(contact.avatarUrl!)
+                            : null,
+                        child: contact.avatarUrl == null
+                            ? Text(
+                                contact.displayName.characters.first
+                                    .toUpperCase(),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700),
+                              )
+                            : null,
+                      ),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              contact.displayName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 16),
+                            ),
+                          ),
+                          if (contact.isVerified) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.verified_rounded,
+                                size: 16, color: AppColors.primary),
+                          ],
+                        ],
+                      ),
+                      subtitle: contact.username != null
+                          ? Text('@${contact.username}')
+                          : null,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Mensaje directo',
+                            icon: const Icon(Icons.chat_bubble_outline_rounded,
+                                color: AppColors.primary),
+                            onPressed: () => _openChat(contact),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (val) {
+                              if (val == 'remove') {
+                                _confirmRemoveContact(contact);
+                              }
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(
+                                value: 'remove',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.person_remove_outlined,
+                                        color: AppColors.error),
+                                    SizedBox(width: 10),
+                                    Text('Eliminar contacto',
+                                        style:
+                                            TextStyle(color: AppColors.error)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      onTap: () => _openChat(contact),
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
+              );
+            }(),
         ],
       ),
     );

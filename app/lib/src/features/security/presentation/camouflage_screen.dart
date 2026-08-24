@@ -62,7 +62,8 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
 
   void _onEqualsPress() {
     // 1. Verificar si lo escrito en pantalla coincide con el PIN secreto de desbloqueo
-    final cleanDisplay = _display.replaceAll('.', '').replaceAll('-', '').trim();
+    final cleanDisplay =
+        _display.replaceAll('.', '').replaceAll('-', '').trim();
     if (CamouflageService.instance.unlock(cleanDisplay) ||
         CamouflageService.instance.unlock(_display.trim())) {
       return;
@@ -72,7 +73,8 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
     setState(() {
       if (_firstOperand != null && _operator != null) {
         final secondOperand = double.tryParse(_display) ?? 0;
-        _expression = '${_formatNumber(_firstOperand!)} $_operator ${_formatNumber(secondOperand)} =';
+        _expression =
+            '${_formatNumber(_firstOperand!)} $_operator ${_formatNumber(secondOperand)} =';
         _calculate();
         _firstOperand = null;
         _operator = null;
@@ -118,7 +120,10 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
     if (val == val.roundToDouble()) {
       return val.toInt().toString();
     }
-    return val.toStringAsFixed(4).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return val
+        .toStringAsFixed(4)
+        .replaceAll(RegExp(r'0+$'), '')
+        .replaceAll(RegExp(r'\.$'), '');
   }
 
   void _onClear() {
@@ -160,7 +165,8 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
           children: [
             Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 20),
             SizedBox(width: 8),
-            Text('PIN de Seguridad', style: TextStyle(fontSize: 16, color: Colors.white)),
+            Text('PIN de Seguridad',
+                style: TextStyle(fontSize: 16, color: Colors.white)),
           ],
         ),
         content: TextField(
@@ -181,10 +187,12 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Colors.white60)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.amber.shade700),
+            style:
+                FilledButton.styleFrom(backgroundColor: Colors.amber.shade700),
             onPressed: () => _attemptDialogUnlock(ctx),
             child: const Text('Desbloquear'),
           ),
@@ -303,7 +311,8 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
     );
   }
 
-  Widget _buildRow(List<String> buttons, {bool isTopRow = false, bool hasDoubleZero = false}) {
+  Widget _buildRow(List<String> buttons,
+      {bool isTopRow = false, bool hasDoubleZero = false}) {
     return Expanded(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -360,7 +369,8 @@ class _CamouflageScreenState extends State<CamouflageScreen> {
                     label,
                     style: TextStyle(
                       fontSize: isOperator ? 26 : 22,
-                      fontWeight: isOperator ? FontWeight.w500 : FontWeight.w400,
+                      fontWeight:
+                          isOperator ? FontWeight.w500 : FontWeight.w400,
                     ),
                   ),
                 ),
