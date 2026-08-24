@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
@@ -64,6 +65,7 @@ class NativeCallNotificationService {
   NativeCallNotificationService._();
 
   static StreamSubscription<CallEvent?>? _eventSubscription;
+  static final Set<String> _programmaticEndIds = <String>{};
 
   static Future<void> initialize() async {
     if (Platform.isAndroid) {
@@ -94,7 +96,7 @@ class NativeCallNotificationService {
         conversationId: conversationId,
         callId: params.id,
       );
-      await FlutterCallkitIncoming.endCall(params.id);
+      await _endNativeCall(params.id, force: true);
       CallManager.instance.showIncomingCall(
         callId: params.id,
         callerName: params.nameCaller ?? 'Contacto',
@@ -106,6 +108,8 @@ class NativeCallNotificationService {
       );
     } else if (event is CallEventActionCallDecline) {
       final params = event.callKitParams;
+      if (_programmaticEndIds.remove(params.id)) return;
+
       final conversationId = params.extra?['conversation_id']?.toString();
       if (conversationId == null || conversationId.isEmpty) return;
       await CallService().rejectCall(
@@ -113,20 +117,38 @@ class NativeCallNotificationService {
         callId: params.id,
       );
     } else if (event is CallEventActionCallTimeout) {
-      await FlutterCallkitIncoming.endCall(event.id);
+      await _endNativeCall(event.id, force: true);
     }
   }
 
   static Future<void> end(String callId) async {
+    await _endNativeCall(callId);
+  }
+
+  static Future<void> _endNativeCall(
+    String callId, {
+    bool force = false,
+  }) async {
+    if (!force &&
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+
+    _programmaticEndIds.add(callId);
     try {
       await FlutterCallkitIncoming.endCall(callId);
     } catch (error) {
       debugPrint('Native call cleanup failed: $error');
+    } finally {
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        _programmaticEndIds.remove(callId);
+      });
     }
   }
 
   static Future<void> reset() async {
     await _eventSubscription?.cancel();
     _eventSubscription = null;
+    _programmaticEndIds.clear();
   }
 }
