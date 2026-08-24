@@ -66,6 +66,7 @@ class NativeCallNotificationService {
 
   static StreamSubscription<CallEvent?>? _eventSubscription;
   static final Set<String> _programmaticEndIds = <String>{};
+  static final Set<String> _acceptedNativeCallIds = <String>{};
 
   static Future<void> initialize() async {
     if (Platform.isAndroid) {
@@ -92,6 +93,7 @@ class NativeCallNotificationService {
       final conversationId = extra['conversation_id']?.toString();
       if (conversationId == null || conversationId.isEmpty) return;
 
+      _acceptedNativeCallIds.add(params.id);
       await CallService().acceptCall(
         conversationId: conversationId,
         callId: params.id,
@@ -110,13 +112,38 @@ class NativeCallNotificationService {
       final params = event.callKitParams;
       if (_programmaticEndIds.remove(params.id)) return;
 
+      _acceptedNativeCallIds.remove(params.id);
       final conversationId = params.extra?['conversation_id']?.toString();
       if (conversationId == null || conversationId.isEmpty) return;
       await CallService().rejectCall(
         conversationId: conversationId,
         callId: params.id,
       );
+    } else if (event is CallEventActionCallEnded) {
+      final params = event.callKitParams;
+      if (_programmaticEndIds.remove(params.id)) return;
+
+      final extra = params.extra ?? const <String, dynamic>{};
+      final conversationId = extra['conversation_id']?.toString();
+      if (conversationId == null || conversationId.isEmpty) return;
+
+      final wasConnected = _acceptedNativeCallIds.remove(params.id);
+      if (wasConnected) {
+        await CallService().endCall(
+          conversationId: conversationId,
+          callId: params.id,
+          durationSeconds: 0,
+          wasConnected: true,
+          callType: extra['call_type'] == 'video' ? 'video' : 'audio',
+        );
+      } else {
+        await CallService().rejectCall(
+          conversationId: conversationId,
+          callId: params.id,
+        );
+      }
     } else if (event is CallEventActionCallTimeout) {
+      _acceptedNativeCallIds.remove(event.id);
       await _endNativeCall(event.id, force: true);
     }
   }
@@ -150,5 +177,6 @@ class NativeCallNotificationService {
     await _eventSubscription?.cancel();
     _eventSubscription = null;
     _programmaticEndIds.clear();
+    _acceptedNativeCallIds.clear();
   }
 }
