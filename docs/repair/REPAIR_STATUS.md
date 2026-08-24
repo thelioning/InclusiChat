@@ -10,7 +10,7 @@ Este archivo indica el punto exacto de la ruta. Debe leerse junto con `REPAIR_RO
 
 | Punto | Estado | Evidencia / nota |
 |---|---|---|
-| REP-001 | `VERIFICADO EN STAGING — PRODUCCIÓN PENDIENTE` | `docs/repair/evidence/REP-001_SCHEMA_RECONCILIATION.md` |
+| REP-001 | `VERIFICADO EN STAGING — BACKUP/PRODUCCIÓN PENDIENTE` | `docs/repair/evidence/REP-001_SCHEMA_RECONCILIATION.md` |
 | REP-002 | `P0 — ABIERTO` | No iniciar como cierre hasta resolver/promover REP-001 |
 | REP-003 | `P0 — ABIERTO` | Eliminación total de cuenta + Storage |
 | REP-004 | `P0 — ABIERTO` | Consentimiento de contacto impuesto por servidor |
@@ -34,9 +34,11 @@ REP-001 pasó sus pruebas de comportamiento en `InclusiChat-Staging`.
 
 **No está cerrado en producción.** El Supabase activo conserva todavía el estado inseguro original hasta una promoción controlada.
 
+La organización está actualmente en plan Supabase **Free**. Supabase recomienda que los proyectos Free realicen dumps manuales; no se debe asumir la existencia de un backup diario restaurable.
+
 Antes de promover:
 
-1. verificar backup recuperable;
+1. crear y verificar el backup manual descrito en `docs/repair/backup/FREE_PLAN_PRODUCTION_BACKUP.md`;
 2. repetir snapshot de producción y comprobar que no hubo drift desde la inspección;
 3. revisar `docs/repair/rollback/REP-001_ROLLBACK.md`;
 4. obtener autorización explícita del propietario;
