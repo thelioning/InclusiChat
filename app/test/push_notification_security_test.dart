@@ -82,6 +82,11 @@ void main() {
       authService,
       contains('PushNotificationService.prepareForSignOut()'),
     );
+    expect(authService, contains('if (_client.auth.currentUser != null)'));
+    expect(
+      authService,
+      contains('PushNotificationService.initializeForCurrentUser()'),
+    );
     expect(function, contains('receiver_id: body.receiver_id'));
   });
 }
