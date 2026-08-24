@@ -9,6 +9,7 @@ import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
 import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
+import 'background_supabase.dart';
 import 'call_manager.dart';
 import 'call_service.dart';
 
@@ -50,9 +51,6 @@ Future<void> showNativeIncomingCall(Map<String, dynamic> data) async {
         isShowFullLockedScreen: true,
         isImportant: true,
         isBot: false,
-        // Android must first post a high-priority CALL notification. Its
-        // full-screen intent can then open the incoming-call activity even
-        // when OEM firmware blocks direct background activity launches.
         isFullScreen: false,
         textAccept: 'Contestar',
         textDecline: 'Rechazar',
@@ -61,12 +59,46 @@ Future<void> showNativeIncomingCall(Map<String, dynamic> data) async {
   );
 }
 
+@pragma('vm:entry-point')
+Future<void> nativeCallBackgroundHandler(CallEvent event) async {
+  if (event is! CallEventActionCallAccept &&
+      event is! CallEventActionCallDecline) {
+    return;
+  }
+
+  if (!await ensureBackgroundSupabase()) return;
+
+  final params = event is CallEventActionCallAccept
+      ? event.callKitParams
+      : (event as CallEventActionCallDecline).callKitParams;
+  final extra = params.extra ?? const <String, dynamic>{};
+  final conversationId = extra['conversation_id']?.toString();
+  if (conversationId == null || conversationId.isEmpty) return;
+
+  try {
+    if (event is CallEventActionCallAccept) {
+      await CallService().acceptCall(
+        conversationId: conversationId,
+        callId: params.id,
+      );
+    } else {
+      await CallService().rejectCall(
+        conversationId: conversationId,
+        callId: params.id,
+      );
+    }
+  } catch (error, stack) {
+    debugPrint('Background native call action failed: $error\n$stack');
+  }
+}
+
 class NativeCallNotificationService {
   NativeCallNotificationService._();
 
   static StreamSubscription<CallEvent?>? _eventSubscription;
   static final Set<String> _programmaticEndIds = <String>{};
   static final Set<String> _acceptedNativeCallIds = <String>{};
+  static bool _backgroundHandlerRegistered = false;
 
   static Future<void> initialize() async {
     if (Platform.isAndroid) {
@@ -77,6 +109,17 @@ class NativeCallNotificationService {
         }
       } catch (error) {
         debugPrint('Full-screen call permission check failed: $error');
+      }
+    }
+
+    if (!_backgroundHandlerRegistered) {
+      try {
+        await FlutterCallkitIncoming.onBackgroundMessage(
+          nativeCallBackgroundHandler,
+        );
+        _backgroundHandlerRegistered = true;
+      } catch (error, stack) {
+        debugPrint('CallKit background handler registration failed: $error\n$stack');
       }
     }
 
@@ -150,6 +193,25 @@ class NativeCallNotificationService {
 
   static Future<void> end(String callId) async {
     await _endNativeCall(callId);
+  }
+
+  static Future<void> endFromRemote(String callId) async {
+    try {
+      await FlutterCallkitIncoming.silenceEvents();
+      final activeCalls = await FlutterCallkitIncoming.activeCalls();
+      for (final call in activeCalls) {
+        if (call.id == callId) {
+          await FlutterCallkitIncoming.hideCallkitIncoming(call);
+        }
+      }
+      await FlutterCallkitIncoming.endCall(callId);
+    } catch (error, stack) {
+      debugPrint('Remote native call cleanup failed: $error\n$stack');
+    } finally {
+      try {
+        await FlutterCallkitIncoming.unsilenceEvents();
+      } catch (_) {}
+    }
   }
 
   static Future<void> _endNativeCall(
