@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
@@ -11,6 +12,8 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'background_supabase.dart';
 import 'call_manager.dart';
 import 'call_service.dart';
+
+const MethodChannel _androidBridge = MethodChannel('com.inclusichat/android_bridge');
 
 Future<void> showNativeIncomingCall(Map<String, dynamic> data) async {
   final callId = data['call_id']?.toString();
@@ -197,6 +200,15 @@ class NativeCallNotificationService {
   static Future<void> endFromRemote(String callId) async {
     try {
       await FlutterCallkitIncoming.silenceEvents();
+
+      if (Platform.isAndroid) {
+        try {
+          await _androidBridge.invokeMethod<void>('finishIncomingCallUi');
+        } catch (error, stack) {
+          debugPrint('Android incoming-call UI close failed: $error\n$stack');
+        }
+      }
+
       final activeCalls = await FlutterCallkitIncoming.activeCalls();
       for (final call in activeCalls) {
         if (call.id == callId) {
