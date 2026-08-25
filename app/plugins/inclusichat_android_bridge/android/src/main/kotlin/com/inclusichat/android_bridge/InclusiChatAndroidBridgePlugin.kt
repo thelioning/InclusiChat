@@ -1,5 +1,6 @@
 package com.inclusichat.android_bridge
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -30,6 +31,15 @@ class InclusiChatAndroidBridgePlugin : FlutterPlugin, MethodChannel.MethodCallHa
                     result.success(true)
                 } catch (error: Exception) {
                     result.error("finish_call_ui_failed", error.message, null)
+                }
+            }
+            "isDeviceLocked" -> {
+                try {
+                    val keyguardManager =
+                        context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                    result.success(keyguardManager.isKeyguardLocked)
+                } catch (error: Exception) {
+                    result.error("keyguard_state_failed", error.message, null)
                 }
             }
             else -> result.notImplemented()
