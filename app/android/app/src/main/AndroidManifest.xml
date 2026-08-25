@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -47,6 +48,47 @@
                     android:host="login-callback" />
             </intent-filter>
         </activity>
+
+        <!--
+          The upstream CallKit UI asks Android to dismiss the keyguard when a
+          call is answered. InclusiChat replaces only those two UI components
+          so a call can stay above the PIN without unlocking the device. The
+          plugin receiver/service remain unchanged.
+        -->
+        <activity
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
+            tools:node="remove" />
+        <activity
+            android:name="com.hiennv.flutter_callkit_incoming.TransparentActivity"
+            tools:node="remove" />
+
+        <activity
+            android:name=".LockscreenCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="${applicationId}.lockscreen_call"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <activity-alias
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
+            android:targetActivity=".LockscreenCallActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="${applicationId}.PERMISSION_CALL">
+            <intent-filter>
+                <action android:name="${applicationId}.com.hiennv.flutter_callkit_incoming.ACTION_CALL_INCOMING" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name="com.hiennv.flutter_callkit_incoming.TransparentActivity"
+            android:targetActivity=".LockscreenCallActivity"
+            android:enabled="true"
+            android:exported="false" />
 
         <receiver
             android:name=".CallActionReceiver"
