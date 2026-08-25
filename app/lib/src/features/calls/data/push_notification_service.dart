@@ -56,6 +56,8 @@ Future<void> _watchBackgroundCallState(Map<String, dynamic> data) async {
   // Firebase background work should stay short. The native CallKit timeout
   // remains the final 35-second safety net; this watcher covers the period in
   // which the remote caller is most likely to cancel while Android is locked.
+  // Do not stop watching after accept: the remote side may end the call before
+  // the foreground Flutter screen has finished restoring.
   final deadline = DateTime.now().add(const Duration(seconds: 28));
   while (DateTime.now().isBefore(deadline)) {
     try {
@@ -65,9 +67,6 @@ Future<void> _watchBackgroundCallState(Map<String, dynamic> data) async {
       );
       if (action == 'end' || action == 'reject') {
         await NativeCallNotificationService.endFromRemote(callId);
-        return;
-      }
-      if (action == 'accept') {
         return;
       }
     } catch (error, stack) {
