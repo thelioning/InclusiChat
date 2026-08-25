@@ -67,6 +67,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
+            android:screenOrientation="portrait"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:taskAffinity="${applicationId}.lockscreen_call"
