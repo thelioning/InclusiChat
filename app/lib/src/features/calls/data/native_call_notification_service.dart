@@ -15,6 +15,16 @@ import 'call_service.dart';
 
 const MethodChannel _androidBridge = MethodChannel('com.inclusichat/android_bridge');
 
+Future<bool> _isAndroidDeviceLocked() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    return await _androidBridge.invokeMethod<bool>('isDeviceLocked') ?? false;
+  } catch (error, stack) {
+    debugPrint('Android keyguard state check failed: $error\n$stack');
+    return false;
+  }
+}
+
 Future<void> showNativeIncomingCall(Map<String, dynamic> data) async {
   final callId = data['call_id']?.toString();
   final conversationId = data['conversation_id']?.toString();
@@ -64,15 +74,22 @@ Future<void> showNativeIncomingCall(Map<String, dynamic> data) async {
 @pragma('vm:entry-point')
 Future<void> nativeCallBackgroundHandler(CallEvent event) async {
   if (event is! CallEventActionCallAccept &&
-      event is! CallEventActionCallDecline) {
+      event is! CallEventActionCallDecline &&
+      event is! CallEventActionCallEnded) {
     return;
   }
 
   if (!await ensureBackgroundSupabase()) return;
 
-  final params = event is CallEventActionCallAccept
-      ? event.callKitParams
-      : (event as CallEventActionCallDecline).callKitParams;
+  final CallKitParams params;
+  if (event is CallEventActionCallAccept) {
+    params = event.callKitParams;
+  } else if (event is CallEventActionCallDecline) {
+    params = event.callKitParams;
+  } else {
+    params = (event as CallEventActionCallEnded).callKitParams;
+  }
+
   final extra = params.extra ?? const <String, dynamic>{};
   final conversationId = extra['conversation_id']?.toString();
   if (conversationId == null || conversationId.isEmpty) return;
@@ -83,10 +100,18 @@ Future<void> nativeCallBackgroundHandler(CallEvent event) async {
         conversationId: conversationId,
         callId: params.id,
       );
-    } else {
+    } else if (event is CallEventActionCallDecline) {
       await CallService().rejectCall(
         conversationId: conversationId,
         callId: params.id,
+      );
+    } else {
+      await CallService().endCall(
+        conversationId: conversationId,
+        callId: params.id,
+        durationSeconds: 0,
+        wasConnected: true,
+        callType: extra['call_type'] == 'video' ? 'video' : 'audio',
       );
     }
   } catch (error, stack) {
@@ -145,6 +170,18 @@ class NativeCallNotificationService {
         conversationId: conversationId,
         callId: params.id,
       );
+
+      final deviceLocked = await _isAndroidDeviceLocked();
+      if (deviceLocked) {
+        // Android owns the visible call surface while the keyguard is active.
+        // Keep Flutter behind the PIN and only mark the native call connected.
+        try {
+          await FlutterCallkitIncoming.setCallConnected(params.id);
+        } catch (error, stack) {
+          debugPrint('Native locked-call connection update failed: $error\n$stack');
+        }
+        return;
+      }
 
       try {
         await FlutterCallkitIncoming.hideCallkitIncoming(params);
@@ -224,6 +261,12 @@ class NativeCallNotificationService {
         }
 
         _acceptedNativeCallIds.add(params.id);
+        if (await _isAndroidDeviceLocked()) {
+          // The native lockscreen activity remains authoritative until Android
+          // reports that the keyguard is no longer active.
+          return;
+        }
+
         CallManager.instance.showIncomingCall(
           callId: params.id,
           callerName: params.nameCaller ?? 'Contacto',
