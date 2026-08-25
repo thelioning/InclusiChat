@@ -49,6 +49,8 @@ class LockscreenCallActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        connected = savedInstanceState?.getBoolean(STATE_CONNECTED, false) ?: false
+        callData = savedInstanceState?.getBundle(STATE_CALL_DATA)
         configureLockscreenWindow()
         registerFinishReceiver()
         handleLaunchIntent(intent)
@@ -58,6 +60,12 @@ class LockscreenCallActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleLaunchIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_CONNECTED, connected)
+        callData?.let { outState.putBundle(STATE_CALL_DATA, it) }
+        super.onSaveInstanceState(outState)
     }
 
     private fun configureLockscreenWindow() {
@@ -107,7 +115,14 @@ class LockscreenCallActivity : Activity() {
                 finishCallUi()
             }
 
-            else -> showIncoming(data)
+            else -> {
+                if (connected) {
+                    timeoutHandler.removeCallbacks(timeoutRunnable)
+                    renderCallUi(data, isConnected = true)
+                } else {
+                    showIncoming(data)
+                }
+            }
         }
     }
 
@@ -139,6 +154,11 @@ class LockscreenCallActivity : Activity() {
     }
 
     private fun rejectCall() {
+        if (connected) {
+            hangUpCall()
+            return
+        }
+
         val data = callData ?: return finishCallUi()
         timeoutHandler.removeCallbacks(timeoutRunnable)
         sendPluginAction(ACTION_DECLINE, data)
@@ -147,6 +167,7 @@ class LockscreenCallActivity : Activity() {
 
     private fun hangUpCall() {
         val data = callData ?: return finishCallUi()
+        connected = false
         timeoutHandler.removeCallbacks(timeoutRunnable)
         sendPluginAction(ACTION_ENDED, data)
         finishCallUi()
@@ -341,6 +362,8 @@ class LockscreenCallActivity : Activity() {
         private const val ACTION_FINISH_INCOMING_UI =
             "com.hiennv.flutter_callkit_incoming.ACTION_ENDED_CALL_INCOMING"
 
+        private const val STATE_CONNECTED = "inclusichat_call_connected"
+        private const val STATE_CALL_DATA = "inclusichat_call_data"
         private const val DEFAULT_RING_DURATION_MS = 35_000L
     }
 
