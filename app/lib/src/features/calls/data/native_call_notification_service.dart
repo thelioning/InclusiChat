@@ -218,7 +218,25 @@ class NativeCallNotificationService {
       final conversationId = extra['conversation_id']?.toString();
       if (conversationId == null || conversationId.isEmpty) return;
 
-      final wasConnected = _acceptedNativeCallIds.remove(params.id);
+      final memorySaysConnected = _acceptedNativeCallIds.remove(params.id);
+      String? persistedAction;
+      try {
+        persistedAction = await CallService().getCallSignalState(
+          conversationId: conversationId,
+          callId: params.id,
+        );
+      } catch (error, stack) {
+        debugPrint('Call end state reconciliation failed: $error\n$stack');
+      }
+
+      if (persistedAction == 'end' || persistedAction == 'reject') {
+        // Another isolate already persisted the terminal state. Do not append a
+        // contradictory duplicate, but still guarantee Android cleanup.
+        await endFromRemote(params.id);
+        return;
+      }
+
+      final wasConnected = memorySaysConnected || persistedAction == 'accept';
       if (wasConnected) {
         await CallService().endCall(
           conversationId: conversationId,
