@@ -127,6 +127,8 @@ class NativeCallNotificationService {
 
     _eventSubscription ??=
         FlutterCallkitIncoming.onEvent.listen(_handleCallEvent);
+
+    await _restoreAcceptedCallIfNeeded();
   }
 
   static Future<void> _handleCallEvent(CallEvent? event) async {
@@ -143,7 +145,14 @@ class NativeCallNotificationService {
         conversationId: conversationId,
         callId: params.id,
       );
-      await _endNativeCall(params.id, force: true);
+
+      try {
+        await FlutterCallkitIncoming.hideCallkitIncoming(params);
+        await FlutterCallkitIncoming.setCallConnected(params.id);
+      } catch (error, stack) {
+        debugPrint('Native accepted-call handoff failed: $error\n$stack');
+      }
+
       CallManager.instance.showIncomingCall(
         callId: params.id,
         callerName: params.nameCaller ?? 'Contacto',
@@ -190,6 +199,44 @@ class NativeCallNotificationService {
     } else if (event is CallEventActionCallTimeout) {
       _acceptedNativeCallIds.remove(event.id);
       await _endNativeCall(event.id, force: true);
+    }
+  }
+
+  static Future<void> _restoreAcceptedCallIfNeeded() async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      final activeCalls = await FlutterCallkitIncoming.activeCalls();
+      for (final params in activeCalls) {
+        if (!params.isAccepted) continue;
+
+        final extra = params.extra ?? const <String, dynamic>{};
+        final conversationId = extra['conversation_id']?.toString();
+        if (conversationId == null || conversationId.isEmpty) continue;
+
+        final action = await CallService().getCallSignalState(
+          conversationId: conversationId,
+          callId: params.id,
+        );
+        if (action == 'end' || action == 'reject') {
+          await endFromRemote(params.id);
+          continue;
+        }
+
+        _acceptedNativeCallIds.add(params.id);
+        CallManager.instance.showIncomingCall(
+          callId: params.id,
+          callerName: params.nameCaller ?? 'Contacto',
+          callerAvatar: extra['caller_avatar']?.toString(),
+          callerId: extra['caller_id']?.toString(),
+          conversationId: conversationId,
+          callType: extra['call_type'] == 'video' ? 'video' : 'audio',
+          acceptedFromSystem: true,
+        );
+        return;
+      }
+    } catch (error, stack) {
+      debugPrint('Accepted native call restore failed: $error\n$stack');
     }
   }
 
