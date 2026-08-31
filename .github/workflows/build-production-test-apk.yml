@@ -1,0 +1,63 @@
+name: Build Production Test APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - '.github/workflows/build-production-test-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-production-test-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore Firebase Android config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "GOOGLE_SERVICES_JSON secret is missing"
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze known warnings without blocking APK
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Build universal production test APK
+        run: >-
+          flutter build apk --release
+          --dart-define=SUPABASE_URL=https://wzkcuvwsbbhrkgkrsrgm.supabase.co
+          --dart-define=SUPABASE_ANON_KEY=sb_publishable_P-yNCVxR9rtpt8Ye6bK_Ig_ve0uRStf
+
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/InclusiChat-Production-Test-v1.5.1.apk
+
+      - name: Upload production test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: InclusiChat-Production-Test-v1.5.1
+          path: app/build/app/outputs/flutter-apk/InclusiChat-Production-Test-v1.5.1.apk
+          if-no-files-found: error
+          retention-days: 30
