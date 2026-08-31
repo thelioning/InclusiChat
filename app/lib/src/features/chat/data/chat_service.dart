@@ -476,21 +476,47 @@ class ChatService extends legacy.ChatService {
     required String type,
     required String content,
   }) async {
-    final response = await _client.functions.invoke(
-      'send-chat-message',
-      body: {
-        'conversation_id': conversationId,
-        'type': type,
-        'content': content,
-        'client_request_id': _newClientRequestId(),
-      },
-    );
+    final requestId = _newClientRequestId();
+    String? confirmedMessageId;
+    Object? lastError;
 
-    final data = response.data;
-    if (data is Map && data['message_id'] != null) {
-      return data['message_id'].toString();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await _client.functions.invoke(
+          'send-chat-message',
+          body: {
+            'conversation_id': conversationId,
+            'type': type,
+            'content': content,
+            'client_request_id': requestId,
+          },
+        );
+
+        final data = response.data;
+        if (data is Map && data['message_id'] != null) {
+          confirmedMessageId = data['message_id'].toString();
+          final accepted = int.tryParse(data['push_accepted']?.toString() ?? '0') ?? 0;
+          if (accepted > 0 || attempt == 1) {
+            return confirmedMessageId;
+          }
+        } else {
+          lastError = Exception('El servidor no confirmó el envío del mensaje.');
+        }
+      } catch (e) {
+        lastError = e;
+      }
+
+      if (attempt == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 450));
+      }
     }
-    throw Exception('El servidor no confirmó el envío del mensaje.');
+
+    if (confirmedMessageId != null) return confirmedMessageId;
+    throw Exception(
+      lastError == null
+          ? 'El servidor no confirmó el envío del mensaje.'
+          : 'No se pudo confirmar el envío: $lastError',
+    );
   }
 
   @override
