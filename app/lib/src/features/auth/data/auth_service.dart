@@ -1,5 +1,8 @@
 import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/message_push_service.dart';
 
 class AuthService {
   AuthService({SupabaseClient? client})
@@ -45,7 +48,11 @@ class AuthService {
   }
 
   Future<List<String>> generateUsernameSuggestions(String baseUsername) async {
-    final clean = baseUsername.trim().toLowerCase().replaceAll('@', '').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    final clean = baseUsername
+        .trim()
+        .toLowerCase()
+        .replaceAll('@', '')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
     if (clean.isEmpty) return [];
 
     final suggestions = <String>[];
@@ -89,7 +96,10 @@ class AuthService {
     );
   }
 
-  Future<void> signOut() => _client.auth.signOut();
+  Future<void> signOut() async {
+    await MessagePushService.prepareForSignOut();
+    await _client.auth.signOut();
+  }
 
   Future<void> resendConfirmation({required String email}) async {
     await _client.auth.resend(
