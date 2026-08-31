@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/message_push_service.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/chat/presentation/chat_home_page.dart';
 import 'shared/widgets/brand_logo.dart';
@@ -138,7 +139,25 @@ class InclusiChatApp extends StatelessWidget {
   }
 
   Widget _pageForAuthentication(bool authenticated) =>
-      authenticated ? const ChatHomePage() : const LoginPage();
+      authenticated ? const _AuthenticatedHome() : const LoginPage();
+}
+
+class _AuthenticatedHome extends StatefulWidget {
+  const _AuthenticatedHome();
+
+  @override
+  State<_AuthenticatedHome> createState() => _AuthenticatedHomeState();
+}
+
+class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
+  @override
+  void initState() {
+    super.initState();
+    MessagePushService.initializeForCurrentUser();
+  }
+
+  @override
+  Widget build(BuildContext context) => const ChatHomePage();
 }
 
 class ConfigurationErrorApp extends StatelessWidget {
