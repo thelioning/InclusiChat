@@ -1,0 +1,313 @@
+name: Migrate chat media to Supabase Storage
+
+on:
+  push:
+    paths:
+      - '.github/workflows/migrate-chat-media-storage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-chat-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace Catbox media flow with private Supabase Storage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('app/lib/src/features/chat/data/chat_service.dart')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          old_imports = "import 'dart:convert';\nimport 'package:flutter/foundation.dart';\nimport 'package:http/http.dart' as http;"
+          new_imports = "import 'dart:convert';\nimport 'dart:io';\nimport 'package:flutter/foundation.dart';"
+          if old_imports not in text:
+              raise SystemExit('Expected http import block not found')
+          text = text.replace(old_imports, new_imports, 1)
+
+          text = text.replace(
+              "if (decoded.containsKey('audio_url')) {",
+              "if (decoded.containsKey('audio_url') || decoded.containsKey('audio_path')) {",
+          )
+          text = text.replace(
+              "} else if (decoded.containsKey('image_url') || decoded.containsKey('image_base64')) {",
+              "} else if (decoded.containsKey('image_url') || decoded.containsKey('image_path') || decoded.containsKey('image_base64')) {",
+          )
+
+          watch_pattern = re.compile(
+              r"  Stream<List<Map<String, dynamic>>> watchMessages\(String conversationId\) \{.*?\n  Stream<List<Map<String, dynamic>>> watchReceipts\(\) \{",
+              re.S,
+          )
+          watch_replacement = r'''  Future<Map<String, dynamic>> _resolvePrivateMedia(
+    Map<String, dynamic> row,
+  ) async {
+    final content = row['content'];
+    if (content is! String || !content.startsWith('{')) return row;
+
+    try {
+      final decodedValue = jsonDecode(content);
+      if (decodedValue is! Map) return row;
+      final decoded = Map<String, dynamic>.from(decodedValue);
+      var changed = false;
+
+      final imagePath = decoded['image_path'] as String?;
+      if (imagePath != null && imagePath.isNotEmpty && decoded['image_url'] == null) {
+        decoded['image_url'] = await _client.storage
+            .from('chat-media')
+            .createSignedUrl(imagePath, 21600);
+        changed = true;
+      }
+
+      final audioPath = decoded['audio_path'] as String?;
+      if (audioPath != null && audioPath.isNotEmpty && decoded['audio_url'] == null) {
+        decoded['audio_url'] = await _client.storage
+            .from('chat-media')
+            .createSignedUrl(audioPath, 21600);
+        changed = true;
+      }
+
+      if (!changed) return row;
+      return <String, dynamic>{...row, 'content': jsonEncode(decoded)};
+    } catch (e) {
+      debugPrint('Private media URL error: $e');
+      return row;
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> watchMessages(String conversationId) {
+    return _client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .order('created_at')
+        .asyncMap((rows) async {
+          final visibleRows = rows.where((row) {
+            if (row['is_deleted'] == true) return false;
+            final meta = row['metadata'];
+            if (meta is Map && meta['deleted_for'] is List) {
+              final deletedList = meta['deleted_for'] as List;
+              if (deletedList.contains(_userId)) return false;
+            }
+            return true;
+          }).toList();
+
+          return Future.wait(
+            visibleRows.map(
+              (row) => _resolvePrivateMedia(Map<String, dynamic>.from(row)),
+            ),
+          );
+        });
+  }
+
+  Stream<List<Map<String, dynamic>>> watchReceipts() {'''
+          text, count = watch_pattern.subn(watch_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'watchMessages replacement count={count}')
+
+          media_pattern = re.compile(
+              r"  Future<String> uploadImageFile\(String filePath\) async \{.*?\n  Future<String\?> getOtherParticipantId\(String conversationId\) async \{",
+              re.S,
+          )
+          media_replacement = r'''  String _extensionFromPath(String filePath, String fallback) {
+    final normalized = filePath.replaceAll('\\', '/');
+    final fileName = normalized.split('/').last;
+    final dot = fileName.lastIndexOf('.');
+    if (dot < 0 || dot == fileName.length - 1) return fallback;
+    final extension = fileName.substring(dot + 1).toLowerCase();
+    if (!RegExp(r'^[a-z0-9]{1,8}$').hasMatch(extension)) return fallback;
+    return extension;
+  }
+
+  String _contentTypeFor(String extension, {required bool audio}) {
+    if (audio) {
+      switch (extension) {
+        case 'm4a':
+        case 'mp4':
+          return 'audio/mp4';
+        case 'aac':
+          return 'audio/aac';
+        case 'mp3':
+          return 'audio/mpeg';
+        case 'wav':
+          return 'audio/wav';
+        default:
+          return 'application/octet-stream';
+      }
+    }
+
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  Future<String> _storePrivateMedia({
+    required String conversationId,
+    required String filePath,
+    required String kind,
+    required String fallbackExtension,
+    required bool audio,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('El archivo multimedia ya no está disponible en el dispositivo.');
+    }
+
+    final extension = _extensionFromPath(filePath, fallbackExtension);
+    final objectPath =
+        '$conversationId/$_userId/${kind}_${DateTime.now().microsecondsSinceEpoch}.$extension';
+
+    await _client.storage.from('chat-media').upload(
+      objectPath,
+      file,
+      fileOptions: FileOptions(
+        upsert: false,
+        contentType: _contentTypeFor(extension, audio: audio),
+      ),
+    );
+
+    return objectPath;
+  }
+
+  // Se conserva esta firma para no romper la UI actual. La subida real se
+  // difiere hasta sendImageMessage, donde ya conocemos conversationId.
+  Future<String> uploadImageFile(String filePath) async => filePath;
+
+  Future<void> sendImageMessage({
+    required String conversationId,
+    required String imageUrl,
+    String? caption,
+  }) async {
+    final cleanCaption = caption?.trim() ?? '';
+    final isLegacyRemote =
+        imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+
+    final payload = <String, dynamic>{'caption': cleanCaption};
+    if (isLegacyRemote) {
+      payload['image_url'] = imageUrl;
+    } else {
+      payload['image_path'] = await _storePrivateMedia(
+        conversationId: conversationId,
+        filePath: imageUrl,
+        kind: 'image',
+        fallbackExtension: 'jpg',
+        audio: false,
+      );
+    }
+
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': _userId,
+      'type': 'image',
+      'content': jsonEncode(payload),
+    });
+
+    try {
+      await _client.from('conversations').update({
+        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', conversationId);
+    } catch (_) {}
+  }
+
+  Future<void> sendImageToMultipleDestinations({
+    required List<String> contactUserIds,
+    required List<String> conversationIds,
+    required String imagePath,
+    String? caption,
+  }) async {
+    final targetConvIds = <String>{...conversationIds};
+    for (final uId in contactUserIds) {
+      final convId = await createDirectConversation(uId);
+      targetConvIds.add(convId);
+    }
+    for (final convId in targetConvIds) {
+      await sendImageMessage(
+        conversationId: convId,
+        imageUrl: imagePath,
+        caption: caption,
+      );
+    }
+  }
+
+  // Igual que las imágenes: la subida se realiza al conocer conversationId.
+  Future<String> uploadAudioFile(String filePath) async => filePath;
+
+  Future<void> sendAudioMessage({
+    required String conversationId,
+    required String audioUrl,
+    required int durationSeconds,
+  }) async {
+    final isLegacyRemote =
+        audioUrl.startsWith('http://') || audioUrl.startsWith('https://');
+
+    final payload = <String, dynamic>{'duration': durationSeconds};
+    if (isLegacyRemote) {
+      payload['audio_url'] = audioUrl;
+    } else {
+      payload['audio_path'] = await _storePrivateMedia(
+        conversationId: conversationId,
+        filePath: audioUrl,
+        kind: 'audio',
+        fallbackExtension: 'm4a',
+        audio: true,
+      );
+    }
+
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': _userId,
+      'type': 'audio',
+      'content': jsonEncode(payload),
+    });
+
+    try {
+      await _client.from('conversations').update({
+        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', conversationId);
+    } catch (_) {}
+  }
+
+  Future<String?> getOtherParticipantId(String conversationId) async {'''
+          text, count = media_pattern.subn(media_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'media replacement count={count}')
+
+          if 'catbox.moe' in text or "package:http/http.dart" in text:
+              raise SystemExit('Catbox/http references still present after migration')
+          if text == original:
+              raise SystemExit('No changes produced')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate diff
+        run: |
+          git diff --check
+          grep -q "from('chat-media')" app/lib/src/features/chat/data/chat_service.dart
+          ! grep -q "catbox.moe" app/lib/src/features/chat/data/chat_service.dart
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/lib/src/features/chat/data/chat_service.dart
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: store chat media in private Supabase bucket"
+            git push
+          fi
