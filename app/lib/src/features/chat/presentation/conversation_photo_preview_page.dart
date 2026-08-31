@@ -60,14 +60,17 @@ class _ConversationPhotoPreviewPageState
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         title: const Text('Vista previa'),
-        leading: IconButton(
-          tooltip: 'Cancelar',
-          onPressed: _cancel,
-          icon: const Icon(Icons.close_rounded),
-        ),
+        actions: [
+          TextButton(
+            onPressed: _cancel,
+            child: const Text('Cancelar'),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -128,10 +131,10 @@ class _ConversationPhotoPreviewPageState
                     ),
                   ),
                   const SizedBox(width: 10),
-                  IconButton.filled(
-                    tooltip: 'Enviar foto',
+                  FilledButton.icon(
                     onPressed: _confirmSend,
                     icon: const Icon(Icons.send_rounded),
+                    label: const Text('Enviar'),
                   ),
                 ],
               ),
