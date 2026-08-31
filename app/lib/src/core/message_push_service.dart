@@ -64,8 +64,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final ownerUserId = preferences.getString(_pushOwnerKey);
   if (ownerUserId == null || ownerUserId != receiverId) return;
 
-  // La notificación se muestra aunque la restauración de Supabase tarde o
-  // falle. El usuario no debe perder el aviso por un problema de sesión local.
+  // El aviso no depende de que Supabase pueda restaurar la sesión enseguida.
   await MessagePushService.showChatNotification(message.data);
 
   if (!await _ensureBackgroundSupabase()) return;
@@ -94,6 +93,8 @@ class MessagePushService {
 
   static StreamSubscription<String>? _tokenSubscription;
   static StreamSubscription<RemoteMessage>? _foregroundSubscription;
+  static RealtimeChannel? _outgoingMessageChannel;
+  static RealtimeChannel? _readStateChannel;
   static bool _initialized = false;
   static String? _initializedUserId;
   static bool _localNotificationsInitialized = false;
@@ -102,6 +103,10 @@ class MessagePushService {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     if (_initialized && _initializedUserId == user.id) return;
+
+    if (_initialized && _initializedUserId != user.id) {
+      await resetRuntimeSubscriptions();
+    }
 
     await _ensureLocalNotificationsInitialized();
 
@@ -130,8 +135,91 @@ class MessagePushService {
       await _markDeliveredInForeground(message.data);
     });
 
+    _listenForOutgoingMessages(user.id);
+    _listenForReadStates(user.id);
+
     _initializedUserId = user.id;
     _initialized = true;
+  }
+
+  static void _listenForOutgoingMessages(String userId) {
+    final client = Supabase.instance.client;
+    final oldChannel = _outgoingMessageChannel;
+    if (oldChannel != null) {
+      client.removeChannel(oldChannel);
+    }
+
+    _outgoingMessageChannel = client
+        .channel('message-push-outgoing-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'sender_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final messageId = payload.newRecord['id']?.toString();
+            if (messageId == null || messageId.isEmpty) return;
+            unawaited(_dispatchMessagePush(messageId));
+          },
+        )
+        .subscribe();
+  }
+
+  static void _listenForReadStates(String userId) {
+    final client = Supabase.instance.client;
+    final oldChannel = _readStateChannel;
+    if (oldChannel != null) {
+      client.removeChannel(oldChannel);
+    }
+
+    _readStateChannel = client
+        .channel('message-push-read-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'message_read_states',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final messageId = payload.newRecord['message_id']?.toString();
+            if (messageId == null || messageId.isEmpty) return;
+            unawaited(_clearNotificationForMessage(messageId));
+          },
+        )
+        .subscribe();
+  }
+
+  static Future<void> _dispatchMessagePush(String messageId) async {
+    try {
+      await Supabase.instance.client.functions.invoke(
+        'send-message-notification',
+        body: {'message_id': messageId},
+      );
+    } catch (error, stack) {
+      debugPrint('Message push dispatch failed: $error\n$stack');
+    }
+  }
+
+  static Future<void> _clearNotificationForMessage(String messageId) async {
+    try {
+      final row = await Supabase.instance.client
+          .from('messages')
+          .select('conversation_id')
+          .eq('id', messageId)
+          .maybeSingle();
+      final conversationId = row?['conversation_id']?.toString();
+      if (conversationId == null || conversationId.isEmpty) return;
+      await clearConversationNotification(conversationId);
+    } catch (error, stack) {
+      debugPrint('Notification clear lookup failed: $error\n$stack');
+    }
   }
 
   static Future<void> _saveToken(String token, String userId) async {
@@ -256,6 +344,28 @@ class MessagePushService {
     await _notifications.cancel(notificationIdForConversation(conversationId));
   }
 
+  static Future<void> resetRuntimeSubscriptions() async {
+    final client = Supabase.instance.client;
+    await _tokenSubscription?.cancel();
+    await _foregroundSubscription?.cancel();
+    _tokenSubscription = null;
+    _foregroundSubscription = null;
+
+    final outgoing = _outgoingMessageChannel;
+    if (outgoing != null) {
+      await client.removeChannel(outgoing);
+      _outgoingMessageChannel = null;
+    }
+    final readState = _readStateChannel;
+    if (readState != null) {
+      await client.removeChannel(readState);
+      _readStateChannel = null;
+    }
+
+    _initialized = false;
+    _initializedUserId = null;
+  }
+
   static Future<void> prepareForSignOut() async {
     final preferences = await SharedPreferences.getInstance();
     final token = preferences.getString(_pushTokenKey);
@@ -275,12 +385,7 @@ class MessagePushService {
 
     await preferences.remove(_pushOwnerKey);
     await preferences.remove(_pushTokenKey);
-    await _tokenSubscription?.cancel();
-    await _foregroundSubscription?.cancel();
-    _tokenSubscription = null;
-    _foregroundSubscription = null;
-    _initialized = false;
-    _initializedUserId = null;
+    await resetRuntimeSubscriptions();
 
     await _ensureLocalNotificationsInitialized();
     await _notifications.cancelAll();
