@@ -24,6 +24,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final _chatService = ChatService();
   UserProfileData? _profile;
   bool _isLoading = true;
+  bool _readReceiptsEnabled = true;
+  bool _savingReadReceipts = false;
 
   @override
   void initState() {
@@ -34,14 +36,41 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadProfile() async {
     try {
       final p = await _chatService.loadUserProfile();
+      final readReceipts = await _chatService.getReadReceiptsEnabled();
       if (mounted) {
         setState(() {
           _profile = p;
+          _readReceiptsEnabled = readReceipts;
           _isLoading = false;
         });
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _setReadReceiptsEnabled(bool enabled) async {
+    if (_savingReadReceipts) return;
+
+    setState(() {
+      _readReceiptsEnabled = enabled;
+      _savingReadReceipts = true;
+    });
+
+    try {
+      await _chatService.setReadReceiptsEnabled(enabled);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _readReceiptsEnabled = !enabled);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo actualizar la confirmación de lectura.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingReadReceipts = false);
     }
   }
 
@@ -161,6 +190,15 @@ class _SettingsPageState extends State<SettingsPage> {
                       MaterialPageRoute<void>(builder: (_) => const SecuritySettingsPage()),
                     );
                   },
+                ),
+                _SettingsSwitchTile(
+                  icon: Icons.done_all_rounded,
+                  title: 'Confirmaciones de lectura',
+                  subtitle: _readReceiptsEnabled
+                      ? 'Tus contactos pueden ver cuándo leíste sus mensajes'
+                      : 'Tu lectura es privada; tus propios no leídos se limpian normalmente',
+                  value: _readReceiptsEnabled,
+                  onChanged: _savingReadReceipts ? null : _setReadReceiptsEnabled,
                 ),
                 _SettingsTile(
                   icon: Icons.notifications_outlined,
@@ -309,6 +347,42 @@ class _SettingsTile extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
       onTap: onTap,
+    );
+  }
+}
+
+class _SettingsSwitchTile extends StatelessWidget {
+  const _SettingsSwitchTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+        child: Icon(icon, color: AppColors.primary, size: 22),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+      ),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+      ),
+      onTap: onChanged == null ? null : () => onChanged!(!value),
     );
   }
 }
