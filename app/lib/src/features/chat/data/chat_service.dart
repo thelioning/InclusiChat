@@ -19,6 +19,9 @@ class ChatService extends legacy.ChatService {
 
   final SupabaseClient _client;
 
+  static ValueNotifier<legacy.UserProfileData?> get currentUserProfileNotifier =>
+      legacy.ChatService.currentUserProfileNotifier;
+
   String get _userId {
     final id = _client.auth.currentUser?.id;
     if (id == null) throw const AuthException('No authenticated user');
