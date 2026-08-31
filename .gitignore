@@ -14,6 +14,10 @@ app/.pub/
 
 # Secrets & Local Configs
 app/config/dev.json
+app/android/app/google-services.json
+supabase/.env.functions.local
+supabase/*firebase-adminsdk*.json
+supabase/.temp/
 *.env
 
 # Large Binaries
