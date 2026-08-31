@@ -12,6 +12,9 @@ export 'chat_service_legacy.dart' hide ChatService;
 ///
 /// Conserva toda la lógica estable del servicio original y sustituye únicamente
 /// el manejo de fotos y notas de voz para usar el bucket privado `chat-media`.
+/// También mantiene las señales de llamada fuera de la experiencia de Chats:
+/// no aparecen como mensajes, no alteran el preview, no reordenan el chat y no
+/// cuentan como mensajes no leídos.
 class ChatService extends legacy.ChatService {
   ChatService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client,
@@ -26,6 +29,75 @@ class ChatService extends legacy.ChatService {
     final id = _client.auth.currentUser?.id;
     if (id == null) throw const AuthException('No authenticated user');
     return id;
+  }
+
+  bool _isCallSignal(Map<String, dynamic> row) {
+    final metadata = row['metadata'];
+    return metadata is Map && metadata['call_signal'] == true;
+  }
+
+  bool _isVisibleChatMessage(Map<String, dynamic> row) {
+    if (row['is_deleted'] == true || _isCallSignal(row)) return false;
+
+    final metadata = row['metadata'];
+    if (metadata is Map && metadata['deleted_for'] is List) {
+      final deletedFor = metadata['deleted_for'] as List;
+      if (deletedFor.contains(_userId)) return false;
+    }
+    return true;
+  }
+
+  DateTime _messageDate(dynamic value, DateTime fallback) {
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  int _receiptRank(String status) {
+    switch (status) {
+      case 'read':
+        return 3;
+      case 'delivered':
+        return 2;
+      case 'sent':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  String? _previewFromContent(String? content) {
+    if (content == null) return null;
+
+    if (content.startsWith('{')) {
+      try {
+        final decodedValue = jsonDecode(content);
+        if (decodedValue is Map) {
+          final decoded = Map<String, dynamic>.from(decodedValue);
+          if (decoded['audio_path'] != null || decoded['audio_url'] != null) {
+            final duration = decoded['duration'] as int? ?? 0;
+            final minutes = duration ~/ 60;
+            final seconds = (duration % 60).toString().padLeft(2, '0');
+            return '🎤 Nota de voz ($minutes:$seconds)';
+          }
+          if (decoded['image_path'] != null ||
+              decoded['image_url'] != null ||
+              decoded['image_base64'] != null) {
+            final caption = (decoded['caption'] as String?)?.trim() ?? '';
+            return caption.isNotEmpty ? '📷 $caption' : '📷 Foto';
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (content.contains('[IMAGE_URL]')) {
+      final parts = content.split('|||');
+      if (parts.length > 1 && parts[1].trim().isNotEmpty) {
+        return '📷 ${parts[1].trim()}';
+      }
+      return '📷 Foto';
+    }
+
+    return content;
   }
 
   String _extensionFromPath(String filePath, String fallback) {
@@ -144,58 +216,149 @@ class ChatService extends legacy.ChatService {
 
   @override
   Future<List<legacy.ConversationSummary>> loadConversations() async {
-    final conversations = await super.loadConversations();
+    final baseConversations = await super.loadConversations();
+    if (baseConversations.isEmpty) return baseConversations;
 
-    return conversations.map((item) {
-      var preview = item.lastMessage;
-      if (preview != null && preview.startsWith('{')) {
-        try {
-          final decodedValue = jsonDecode(preview);
-          if (decodedValue is Map) {
-            final decoded = Map<String, dynamic>.from(decodedValue);
-            if (decoded['audio_path'] != null) {
-              final duration = decoded['duration'] as int? ?? 0;
-              final minutes = duration ~/ 60;
-              final seconds = (duration % 60).toString().padLeft(2, '0');
-              preview = '🎤 Nota de voz ($minutes:$seconds)';
-            } else if (decoded['image_path'] != null) {
-              final caption = (decoded['caption'] as String?)?.trim() ?? '';
-              preview = caption.isNotEmpty ? '📷 $caption' : '📷 Foto';
-            }
-          }
-        } catch (_) {}
+    final conversationIds = baseConversations.map((item) => item.id).toList();
+
+    try {
+      final rawRows = await _client
+          .from('messages')
+          .select(
+            'id,conversation_id,sender_id,content,created_at,metadata,is_deleted',
+          )
+          .inFilter('conversation_id', conversationIds)
+          .order('created_at', ascending: false);
+
+      final chatRows = (rawRows as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .where(_isVisibleChatMessage)
+          .toList();
+
+      final latestByConversation = <String, Map<String, dynamic>>{};
+      for (final row in chatRows) {
+        latestByConversation.putIfAbsent(
+          row['conversation_id'].toString(),
+          () => row,
+        );
       }
 
-      return legacy.ConversationSummary(
-        id: item.id,
-        title: item.title,
-        type: item.type,
-        lastActivityAt: item.lastActivityAt,
-        unreadCount: item.unreadCount,
-        avatarUrl: item.avatarUrl,
-        lastMessage: preview,
-        isLastMessageMine: item.isLastMessageMine,
-        lastMessageReceiptStatus: item.lastMessageReceiptStatus,
-        isStarred: item.isStarred,
-      );
-    }).toList();
+      final incomingIds = chatRows
+          .where((row) => row['sender_id']?.toString() != _userId)
+          .map((row) => row['id'].toString())
+          .toList();
+
+      final readIds = <String>{};
+      if (incomingIds.isNotEmpty) {
+        final receiptRows = await _client
+            .from('message_receipts')
+            .select('message_id,status')
+            .eq('user_id', _userId)
+            .inFilter('message_id', incomingIds);
+        for (final receipt in receiptRows as List) {
+          if (receipt['status']?.toString() == 'read') {
+            readIds.add(receipt['message_id'].toString());
+          }
+        }
+      }
+
+      final unreadByConversation = <String, int>{};
+      for (final row in chatRows) {
+        if (row['sender_id']?.toString() == _userId) continue;
+        if (readIds.contains(row['id'].toString())) continue;
+        final conversationId = row['conversation_id'].toString();
+        unreadByConversation.update(
+          conversationId,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+
+      final latestOutgoingIds = latestByConversation.values
+          .where((row) => row['sender_id']?.toString() == _userId)
+          .map((row) => row['id'].toString())
+          .toList();
+
+      final outgoingReceiptStatus = <String, String>{};
+      if (latestOutgoingIds.isNotEmpty) {
+        final receiptRows = await _client
+            .from('message_receipts')
+            .select('message_id,status')
+            .neq('user_id', _userId)
+            .inFilter('message_id', latestOutgoingIds);
+        for (final receipt in receiptRows as List) {
+          final messageId = receipt['message_id'].toString();
+          final status = receipt['status']?.toString() ?? 'sent';
+          final current = outgoingReceiptStatus[messageId];
+          if (current == null || _receiptRank(status) > _receiptRank(current)) {
+            outgoingReceiptStatus[messageId] = status;
+          }
+        }
+      }
+
+      final createdRows = await _client
+          .from('conversations')
+          .select('id,created_at')
+          .inFilter('id', conversationIds);
+      final createdAtByConversation = <String, DateTime>{};
+      for (final row in createdRows as List) {
+        final id = row['id'].toString();
+        final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
+        if (createdAt != null) createdAtByConversation[id] = createdAt;
+      }
+
+      final rebuilt = baseConversations.map((item) {
+        final latest = latestByConversation[item.id];
+        final isMine = latest?['sender_id']?.toString() == _userId;
+        final messageId = latest?['id']?.toString();
+        final fallbackDate = createdAtByConversation[item.id] ?? item.lastActivityAt;
+        final activityDate = latest == null
+            ? fallbackDate
+            : _messageDate(latest['created_at'], fallbackDate);
+
+        return legacy.ConversationSummary(
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          lastActivityAt: activityDate,
+          unreadCount: unreadByConversation[item.id] ?? 0,
+          avatarUrl: item.avatarUrl,
+          lastMessage: _previewFromContent(latest?['content'] as String?),
+          isLastMessageMine: isMine,
+          lastMessageReceiptStatus: isMine && messageId != null
+              ? (outgoingReceiptStatus[messageId] ?? 'sent')
+              : null,
+          isStarred: item.isStarred,
+        );
+      }).toList();
+
+      rebuilt.sort((a, b) => b.lastActivityAt.compareTo(a.lastActivityAt));
+      return rebuilt;
+    } catch (e) {
+      debugPrint('Error separating call signals from chat list: $e');
+      return baseConversations;
+    }
   }
 
   @override
   Future<List<Map<String, dynamic>>> loadMessages(String conversationId) async {
     final rows = await super.loadMessages(conversationId);
-    return Future.wait(
-      rows.map((row) => _resolvePrivateMedia(Map<String, dynamic>.from(row))),
-    );
+    final visibleRows = rows
+        .map((row) => Map<String, dynamic>.from(row))
+        .where(_isVisibleChatMessage)
+        .toList();
+    return Future.wait(visibleRows.map(_resolvePrivateMedia));
   }
 
   @override
   Stream<List<Map<String, dynamic>>> watchMessages(String conversationId) {
-    return super.watchMessages(conversationId).asyncMap(
-      (rows) => Future.wait(
-        rows.map((row) => _resolvePrivateMedia(Map<String, dynamic>.from(row))),
-      ),
-    );
+    return super.watchMessages(conversationId).asyncMap((rows) {
+      final visibleRows = rows
+          .map((row) => Map<String, dynamic>.from(row))
+          .where(_isVisibleChatMessage)
+          .toList();
+      return Future.wait(visibleRows.map(_resolvePrivateMedia));
+    });
   }
 
   /// Mantiene la firma usada por la UI. La subida real se hace cuando ya
