@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,18 +9,19 @@ import 'chat_service_legacy.dart' as legacy;
 
 export 'chat_service_legacy.dart' hide ChatService;
 
-/// Capa segura de almacenamiento multimedia y estado de chat para InclusiChat.
+/// Capa segura de chat para InclusiChat.
 ///
-/// Conserva la lógica estable del servicio original y sustituye el manejo de
-/// fotos y notas de voz para usar el bucket privado `chat-media`. También
-/// mantiene las señales de llamada fuera de Chats y separa el estado privado
-/// "ya lo leí" del receipt que puede ver el remitente.
+/// Mantiene la compatibilidad con el servicio legado, separa señales de
+/// llamadas de Chats, usa almacenamiento privado para multimedia, separa la
+/// lectura privada de la confirmación visible y envía los mensajes mediante
+/// una Edge Function que también dispara FCM desde el servidor.
 class ChatService extends legacy.ChatService {
   ChatService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client,
         super(client: client);
 
   final SupabaseClient _client;
+  final Random _secureRandom = Random.secure();
 
   static ValueNotifier<legacy.UserProfileData?> get currentUserProfileNotifier =>
       legacy.ChatService.currentUserProfileNotifier;
@@ -86,6 +88,27 @@ class ChatService extends legacy.ChatService {
     }, onConflict: 'user_id');
   }
 
+  Future<bool> isConversationMuted(String conversationId) async {
+    final row = await _client
+        .from('conversation_participants')
+        .select('is_muted')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', _userId)
+        .maybeSingle();
+    return row?['is_muted'] as bool? ?? false;
+  }
+
+  Future<void> setConversationMuted(
+    String conversationId,
+    bool muted,
+  ) async {
+    await _client
+        .from('conversation_participants')
+        .update({'is_muted': muted})
+        .eq('conversation_id', conversationId)
+        .eq('user_id', _userId);
+  }
+
   Future<Set<String>> _loadPrivateReadIds(List<String> incomingIds) async {
     final readIds = <String>{};
     if (incomingIds.isEmpty) return readIds;
@@ -101,8 +124,6 @@ class ChatService extends legacy.ChatService {
       }
       return readIds;
     } catch (e) {
-      // Compatibilidad temporal con entornos que todavía no tengan la
-      // migración de message_read_states.
       debugPrint('Private read state fallback: $e');
       final receiptRows = await _client
           .from('message_receipts')
@@ -132,8 +153,6 @@ class ChatService extends legacy.ChatService {
       debugPrint('Private read state write fallback: $e');
     }
 
-    // En un entorno anterior a la migración se conserva el comportamiento
-    // histórico para no romper la lectura ni los badges.
     if (!privateStateStored) {
       await super.markMessageRead(messageId);
       return;
@@ -144,9 +163,6 @@ class ChatService extends legacy.ChatService {
       return;
     }
 
-    // La lectura queda guardada de forma privada, pero el remitente solo debe
-    // conocer que el mensaje fue entregado. Nunca degradamos un receipt que ya
-    // había sido publicado como read antes de desactivar la preferencia.
     try {
       final existing = await _client
           .from('message_receipts')
@@ -349,7 +365,6 @@ class ChatService extends legacy.ChatService {
           .where((row) => row['sender_id']?.toString() != _userId)
           .map((row) => row['id'].toString())
           .toList();
-
       final readIds = await _loadPrivateReadIds(incomingIds);
 
       final unreadByConversation = <String, int>{};
@@ -451,8 +466,47 @@ class ChatService extends legacy.ChatService {
     });
   }
 
-  /// Mantiene la firma usada por la UI. La subida real se hace cuando ya
-  /// conocemos la conversación, dentro de [sendImageMessage].
+  String _newClientRequestId() {
+    final bytes = List<int>.generate(24, (_) => _secureRandom.nextInt(256));
+    return bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<String> _sendServerMessage({
+    required String conversationId,
+    required String type,
+    required String content,
+  }) async {
+    final response = await _client.functions.invoke(
+      'send-chat-message',
+      body: {
+        'conversation_id': conversationId,
+        'type': type,
+        'content': content,
+        'client_request_id': _newClientRequestId(),
+      },
+    );
+
+    final data = response.data;
+    if (data is Map && data['message_id'] != null) {
+      return data['message_id'].toString();
+    }
+    throw Exception('El servidor no confirmó el envío del mensaje.');
+  }
+
+  @override
+  Future<void> sendTextMessage({
+    required String conversationId,
+    required String content,
+  }) async {
+    final text = content.trim();
+    if (text.isEmpty) return;
+    await _sendServerMessage(
+      conversationId: conversationId,
+      type: 'text',
+      content: text,
+    );
+  }
+
   @override
   Future<String> uploadImageFile(String filePath) async => filePath;
 
@@ -466,35 +520,37 @@ class ChatService extends legacy.ChatService {
     final isLegacyRemote =
         imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
 
+    String? uploadedObjectPath;
     final payload = <String, dynamic>{'caption': cleanCaption};
     if (isLegacyRemote) {
       payload['image_url'] = imageUrl;
     } else {
-      payload['image_path'] = await _storePrivateMedia(
+      uploadedObjectPath = await _storePrivateMedia(
         conversationId: conversationId,
         filePath: imageUrl,
         kind: 'image',
         fallbackExtension: 'jpg',
         audio: false,
       );
+      payload['image_path'] = uploadedObjectPath;
     }
 
-    await _client.from('messages').insert({
-      'conversation_id': conversationId,
-      'sender_id': _userId,
-      'type': 'image',
-      'content': jsonEncode(payload),
-    });
-
     try {
-      await _client.from('conversations').update({
-        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', conversationId);
-    } catch (_) {}
+      await _sendServerMessage(
+        conversationId: conversationId,
+        type: 'image',
+        content: jsonEncode(payload),
+      );
+    } catch (_) {
+      if (uploadedObjectPath != null) {
+        try {
+          await _client.storage.from('chat-media').remove([uploadedObjectPath]);
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
-  /// Igual que con imágenes: la subida se difiere hasta conocer la
-  /// conversación, dentro de [sendAudioMessage].
   @override
   Future<String> uploadAudioFile(String filePath) async => filePath;
 
@@ -507,30 +563,34 @@ class ChatService extends legacy.ChatService {
     final isLegacyRemote =
         audioUrl.startsWith('http://') || audioUrl.startsWith('https://');
 
+    String? uploadedObjectPath;
     final payload = <String, dynamic>{'duration': durationSeconds};
     if (isLegacyRemote) {
       payload['audio_url'] = audioUrl;
     } else {
-      payload['audio_path'] = await _storePrivateMedia(
+      uploadedObjectPath = await _storePrivateMedia(
         conversationId: conversationId,
         filePath: audioUrl,
         kind: 'audio',
         fallbackExtension: 'm4a',
         audio: true,
       );
+      payload['audio_path'] = uploadedObjectPath;
     }
 
-    await _client.from('messages').insert({
-      'conversation_id': conversationId,
-      'sender_id': _userId,
-      'type': 'audio',
-      'content': jsonEncode(payload),
-    });
-
     try {
-      await _client.from('conversations').update({
-        'last_activity_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', conversationId);
-    } catch (_) {}
+      await _sendServerMessage(
+        conversationId: conversationId,
+        type: 'audio',
+        content: jsonEncode(payload),
+      );
+    } catch (_) {
+      if (uploadedObjectPath != null) {
+        try {
+          await _client.storage.from('chat-media').remove([uploadedObjectPath]);
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 }
