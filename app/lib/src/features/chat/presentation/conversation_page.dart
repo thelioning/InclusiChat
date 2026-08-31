@@ -11,6 +11,7 @@ import 'package:record/record.dart';
 import '../../../theme/app_colors.dart';
 import '../data/chat_service.dart';
 import 'call_screen.dart';
+import 'conversation_photo_preview_page.dart';
 
 class ConversationPage extends StatefulWidget {
   const ConversationPage({
@@ -609,17 +610,30 @@ class _ConversationPageState extends State<ConversationPage> {
         maxWidth: 800,
         maxHeight: 800,
       );
-      if (file == null) return;
+      if (file == null || !mounted) return;
+
+      final initialCaption = _controller.text.trim();
+      final preview = await Navigator.of(context)
+          .push<ConversationPhotoPreviewResult>(
+        MaterialPageRoute<ConversationPhotoPreviewResult>(
+          builder: (_) => ConversationPhotoPreviewPage(
+            imagePath: file.path,
+            initialCaption: initialCaption,
+          ),
+        ),
+      );
+
+      if (preview == null || !mounted) return;
 
       setState(() => _sending = true);
       final imageUrl = await _service.uploadImageFile(file.path);
-      final caption = _controller.text.trim();
 
       await _service.sendImageMessage(
         conversationId: widget.conversationId,
         imageUrl: imageUrl,
-        caption: caption.isNotEmpty ? caption : null,
+        caption: preview.caption.isNotEmpty ? preview.caption : null,
       );
+
       _controller.clear();
       _onTextChanged();
     } catch (e) {
