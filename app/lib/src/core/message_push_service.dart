@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -9,8 +10,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _pushOwnerKey = 'inclusichat_message_push_owner';
 const _pushTokenKey = 'inclusichat_message_push_token';
-const _messageChannelId = 'inclusichat_messages_channel';
+const _installationIdKey = 'inclusichat_push_installation_id';
+const _messageChannelId = 'inclusichat_messages_v2';
+const _silentMessageChannelId = 'inclusichat_messages_silent_v2';
 const _messageChannelName = 'Mensajes de InclusiChat';
+const _messageSummaryNotificationId = 731001;
 
 bool _backgroundSupabaseInitialized = false;
 
@@ -64,13 +68,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final ownerUserId = preferences.getString(_pushOwnerKey);
   if (ownerUserId == null || ownerUserId != receiverId) return;
 
-  // El aviso no depende de que Supabase pueda restaurar la sesión enseguida.
+  // Mostrar el aviso no depende de que Supabase restaure la sesión enseguida.
   await MessagePushService.showChatNotification(message.data);
 
   if (!await _ensureBackgroundSupabase()) return;
   final client = Supabase.instance.client;
-  final currentUserId = client.auth.currentUser?.id;
-  if (currentUserId != receiverId) return;
+  if (client.auth.currentUser?.id != receiverId) return;
 
   try {
     await client.from('message_receipts').upsert({
@@ -90,10 +93,10 @@ class MessagePushService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  static final Random _secureRandom = Random.secure();
 
   static StreamSubscription<String>? _tokenSubscription;
   static StreamSubscription<RemoteMessage>? _foregroundSubscription;
-  static RealtimeChannel? _outgoingMessageChannel;
   static RealtimeChannel? _readStateChannel;
   static bool _initialized = false;
   static String? _initializedUserId;
@@ -109,7 +112,6 @@ class MessagePushService {
     }
 
     await _ensureLocalNotificationsInitialized();
-
     await _messaging.requestPermission(
       alert: true,
       badge: true,
@@ -135,38 +137,53 @@ class MessagePushService {
       await _markDeliveredInForeground(message.data);
     });
 
-    _listenForOutgoingMessages(user.id);
     _listenForReadStates(user.id);
-
     _initializedUserId = user.id;
     _initialized = true;
+    await refreshUnreadBadge();
   }
 
-  static void _listenForOutgoingMessages(String userId) {
-    final client = Supabase.instance.client;
-    final oldChannel = _outgoingMessageChannel;
-    if (oldChannel != null) {
-      client.removeChannel(oldChannel);
-    }
+  static String _randomInstallationId() {
+    final bytes = List<int>.generate(20, (_) => _secureRandom.nextInt(256));
+    return bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+  }
 
-    _outgoingMessageChannel = client
-        .channel('message-push-outgoing-$userId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'sender_id',
-            value: userId,
-          ),
-          callback: (payload) {
-            final messageId = payload.newRecord['id']?.toString();
-            if (messageId == null || messageId.isEmpty) return;
-            unawaited(_dispatchMessagePush(messageId));
-          },
-        )
-        .subscribe();
+  static Future<String> _installationId() async {
+    final preferences = await SharedPreferences.getInstance();
+    final existing = preferences.getString(_installationIdKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final created = _randomInstallationId();
+    await preferences.setString(_installationIdKey, created);
+    return created;
+  }
+
+  static Future<void> _saveToken(String token, String userId) async {
+    try {
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser?.id != userId) return;
+
+      final installationId = await _installationId();
+      await Supabase.instance.client
+          .from('device_push_tokens')
+          .delete()
+          .eq('user_id', userId)
+          .eq('installation_id', installationId)
+          .neq('token', token);
+
+      await Supabase.instance.client.from('device_push_tokens').upsert({
+        'token': token,
+        'user_id': userId,
+        'platform': 'android',
+        'installation_id': installationId,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'token');
+
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_pushOwnerKey, userId);
+      await preferences.setString(_pushTokenKey, token);
+    } catch (error, stack) {
+      debugPrint('FCM token registration failed: $error\n$stack');
+    }
   }
 
   static void _listenForReadStates(String userId) {
@@ -179,7 +196,7 @@ class MessagePushService {
     _readStateChannel = client
         .channel('message-push-read-$userId')
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'message_read_states',
           filter: PostgresChangeFilter(
@@ -187,59 +204,9 @@ class MessagePushService {
             column: 'user_id',
             value: userId,
           ),
-          callback: (payload) {
-            final messageId = payload.newRecord['message_id']?.toString();
-            if (messageId == null || messageId.isEmpty) return;
-            unawaited(_clearNotificationForMessage(messageId));
-          },
+          callback: (_) => unawaited(refreshUnreadBadge()),
         )
         .subscribe();
-  }
-
-  static Future<void> _dispatchMessagePush(String messageId) async {
-    try {
-      await Supabase.instance.client.functions.invoke(
-        'send-message-notification',
-        body: {'message_id': messageId},
-      );
-    } catch (error, stack) {
-      debugPrint('Message push dispatch failed: $error\n$stack');
-    }
-  }
-
-  static Future<void> _clearNotificationForMessage(String messageId) async {
-    try {
-      final row = await Supabase.instance.client
-          .from('messages')
-          .select('conversation_id')
-          .eq('id', messageId)
-          .maybeSingle();
-      final conversationId = row?['conversation_id']?.toString();
-      if (conversationId == null || conversationId.isEmpty) return;
-      await clearConversationNotification(conversationId);
-    } catch (error, stack) {
-      debugPrint('Notification clear lookup failed: $error\n$stack');
-    }
-  }
-
-  static Future<void> _saveToken(String token, String userId) async {
-    try {
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      if (currentUser?.id != userId) return;
-
-      await Supabase.instance.client.from('device_push_tokens').upsert({
-        'token': token,
-        'user_id': userId,
-        'platform': 'android',
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'token');
-
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.setString(_pushOwnerKey, userId);
-      await preferences.setString(_pushTokenKey, token);
-    } catch (error, stack) {
-      debugPrint('FCM token registration failed: $error\n$stack');
-    }
   }
 
   static Future<void> _markDeliveredInForeground(
@@ -275,18 +242,29 @@ class MessagePushService {
     );
     await _notifications.initialize(initializationSettings);
 
-    const channel = AndroidNotificationChannel(
+    const loudChannel = AndroidNotificationChannel(
       _messageChannelId,
       _messageChannelName,
-      description: 'Avisos discretos de mensajes nuevos',
+      description: 'Mensajes nuevos con sonido y vibración',
       importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
       showBadge: true,
     );
-    await _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    const silentChannel = AndroidNotificationChannel(
+      _silentMessageChannelId,
+      'Mensajes silenciados',
+      description: 'Mensajes nuevos sin sonido ni vibración',
+      importance: Importance.defaultImportance,
+      playSound: false,
+      enableVibration: false,
+      showBadge: true,
+    );
 
+    final android = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(loudChannel);
+    await android?.createNotificationChannel(silentChannel);
     _localNotificationsInitialized = true;
   }
 
@@ -295,53 +273,91 @@ class MessagePushService {
   ) async {
     await _ensureLocalNotificationsInitialized();
 
-    final conversationId = data['conversation_id']?.toString() ?? '';
-    if (conversationId.isEmpty) return;
-
     final senderName = data['sender_name']?.toString().trim();
-    final messageType = data['message_type']?.toString() ?? 'text';
-    final unreadCount = int.tryParse(data['unread_count']?.toString() ?? '') ?? 1;
+    final messageType =
+        data['chat_type']?.toString() ?? data['message_type']?.toString() ?? 'text';
+    final badgeCount = int.tryParse(
+          data['badge_count']?.toString() ?? data['unread_count']?.toString() ?? '',
+        ) ??
+        1;
+    final muted = data['muted']?.toString() == 'true';
 
-    final body = switch (messageType) {
+    final singleBody = switch (messageType) {
       'image' => 'Nueva foto',
       'audio' => 'Nueva nota de voz',
       _ => 'Nuevo mensaje',
     };
+    final body = badgeCount > 1 ? '$badgeCount mensajes pendientes' : singleBody;
+    final channelId = muted ? _silentMessageChannelId : _messageChannelId;
+    final channelName = muted ? 'Mensajes silenciados' : _messageChannelName;
 
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
-        _messageChannelId,
-        _messageChannelName,
-        channelDescription: 'Avisos discretos de mensajes nuevos',
-        importance: Importance.high,
-        priority: Priority.high,
+        channelId,
+        channelName,
+        channelDescription: muted
+            ? 'Mensajes nuevos sin sonido ni vibración'
+            : 'Mensajes nuevos con sonido y vibración',
+        importance: muted ? Importance.defaultImportance : Importance.high,
+        priority: muted ? Priority.defaultPriority : Priority.high,
+        playSound: !muted,
+        enableVibration: !muted,
         channelShowBadge: true,
-        number: unreadCount,
+        number: badgeCount,
+        onlyAlertOnce: muted,
       ),
     );
 
     await _notifications.show(
-      notificationIdForConversation(conversationId),
+      _messageSummaryNotificationId,
       senderName == null || senderName.isEmpty ? 'InclusiChat' : senderName,
       body,
       details,
-      payload: conversationId,
+      payload: data['conversation_id']?.toString(),
     );
   }
 
-  static int notificationIdForConversation(String conversationId) {
-    var hash = 0;
-    for (final unit in conversationId.codeUnits) {
-      hash = ((hash * 31) + unit) & 0x7fffffff;
+  static Future<void> refreshUnreadBadge() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final result = await Supabase.instance.client.rpc(
+        'count_my_unread_chat_messages',
+      );
+      final count = result is int ? result : int.tryParse(result.toString()) ?? 0;
+      await _ensureLocalNotificationsInitialized();
+      if (count <= 0) {
+        await _notifications.cancel(_messageSummaryNotificationId);
+        return;
+      }
+
+      final details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          _silentMessageChannelId,
+          'Mensajes silenciados',
+          channelDescription: 'Mensajes pendientes de InclusiChat',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          playSound: false,
+          enableVibration: false,
+          channelShowBadge: true,
+          number: count,
+          onlyAlertOnce: true,
+        ),
+      );
+      await _notifications.show(
+        _messageSummaryNotificationId,
+        'InclusiChat',
+        count == 1 ? '1 mensaje pendiente' : '$count mensajes pendientes',
+        details,
+      );
+    } catch (error, stack) {
+      debugPrint('Unread badge refresh failed: $error\n$stack');
     }
-    return hash == 0 ? 1 : hash;
   }
 
-  static Future<void> clearConversationNotification(
-    String conversationId,
-  ) async {
-    await _ensureLocalNotificationsInitialized();
-    await _notifications.cancel(notificationIdForConversation(conversationId));
+  static Future<void> clearConversationNotification(String _) async {
+    await refreshUnreadBadge();
   }
 
   static Future<void> resetRuntimeSubscriptions() async {
@@ -351,11 +367,6 @@ class MessagePushService {
     _tokenSubscription = null;
     _foregroundSubscription = null;
 
-    final outgoing = _outgoingMessageChannel;
-    if (outgoing != null) {
-      await client.removeChannel(outgoing);
-      _outgoingMessageChannel = null;
-    }
     final readState = _readStateChannel;
     if (readState != null) {
       await client.removeChannel(readState);
@@ -368,18 +379,18 @@ class MessagePushService {
 
   static Future<void> prepareForSignOut() async {
     final preferences = await SharedPreferences.getInstance();
-    final token = preferences.getString(_pushTokenKey);
+    final installationId = preferences.getString(_installationIdKey);
     final user = Supabase.instance.client.auth.currentUser;
 
-    if (token != null && token.isNotEmpty && user != null) {
+    if (installationId != null && installationId.isNotEmpty && user != null) {
       try {
         await Supabase.instance.client
             .from('device_push_tokens')
             .delete()
-            .eq('token', token)
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .eq('installation_id', installationId);
       } catch (error, stack) {
-        debugPrint('FCM token backend removal failed: $error\n$stack');
+        debugPrint('FCM installation detach failed: $error\n$stack');
       }
     }
 
@@ -388,7 +399,7 @@ class MessagePushService {
     await resetRuntimeSubscriptions();
 
     await _ensureLocalNotificationsInitialized();
-    await _notifications.cancelAll();
+    await _notifications.cancel(_messageSummaryNotificationId);
 
     try {
       await _messaging.deleteToken();
