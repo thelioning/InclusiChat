@@ -8,13 +8,12 @@ import 'chat_service_legacy.dart' as legacy;
 
 export 'chat_service_legacy.dart' hide ChatService;
 
-/// Capa segura de almacenamiento multimedia para InclusiChat.
+/// Capa segura de almacenamiento multimedia y estado de chat para InclusiChat.
 ///
-/// Conserva toda la lógica estable del servicio original y sustituye únicamente
-/// el manejo de fotos y notas de voz para usar el bucket privado `chat-media`.
-/// También mantiene las señales de llamada fuera de la experiencia de Chats:
-/// no aparecen como mensajes, no alteran el preview, no reordenan el chat y no
-/// cuentan como mensajes no leídos.
+/// Conserva la lógica estable del servicio original y sustituye el manejo de
+/// fotos y notas de voz para usar el bucket privado `chat-media`. También
+/// mantiene las señales de llamada fuera de Chats y separa el estado privado
+/// "ya lo leí" del receipt que puede ver el remitente.
 class ChatService extends legacy.ChatService {
   ChatService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client,
@@ -62,6 +61,109 @@ class ChatService extends legacy.ChatService {
         return 1;
       default:
         return 0;
+    }
+  }
+
+  Future<bool> getReadReceiptsEnabled() async {
+    try {
+      final row = await _client
+          .from('privacy_settings')
+          .select('read_receipts_enabled')
+          .eq('user_id', _userId)
+          .maybeSingle();
+      return row?['read_receipts_enabled'] as bool? ?? true;
+    } catch (e) {
+      debugPrint('Read receipt preference load error: $e');
+      return true;
+    }
+  }
+
+  Future<void> setReadReceiptsEnabled(bool enabled) async {
+    await _client.from('privacy_settings').upsert({
+      'user_id': _userId,
+      'read_receipts_enabled': enabled,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'user_id');
+  }
+
+  Future<Set<String>> _loadPrivateReadIds(List<String> incomingIds) async {
+    final readIds = <String>{};
+    if (incomingIds.isEmpty) return readIds;
+
+    try {
+      final rows = await _client
+          .from('message_read_states')
+          .select('message_id')
+          .eq('user_id', _userId)
+          .inFilter('message_id', incomingIds);
+      for (final row in rows as List) {
+        readIds.add(row['message_id'].toString());
+      }
+      return readIds;
+    } catch (e) {
+      // Compatibilidad temporal con entornos que todavía no tengan la
+      // migración de message_read_states.
+      debugPrint('Private read state fallback: $e');
+      final receiptRows = await _client
+          .from('message_receipts')
+          .select('message_id,status')
+          .eq('user_id', _userId)
+          .inFilter('message_id', incomingIds);
+      for (final receipt in receiptRows as List) {
+        if (receipt['status']?.toString() == 'read') {
+          readIds.add(receipt['message_id'].toString());
+        }
+      }
+      return readIds;
+    }
+  }
+
+  @override
+  Future<void> markMessageRead(String messageId) async {
+    var privateStateStored = false;
+    try {
+      await _client.from('message_read_states').upsert({
+        'message_id': messageId,
+        'user_id': _userId,
+        'read_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'message_id,user_id');
+      privateStateStored = true;
+    } catch (e) {
+      debugPrint('Private read state write fallback: $e');
+    }
+
+    // En un entorno anterior a la migración se conserva el comportamiento
+    // histórico para no romper la lectura ni los badges.
+    if (!privateStateStored) {
+      await super.markMessageRead(messageId);
+      return;
+    }
+
+    if (await getReadReceiptsEnabled()) {
+      await super.markMessageRead(messageId);
+      return;
+    }
+
+    // La lectura queda guardada de forma privada, pero el remitente solo debe
+    // conocer que el mensaje fue entregado. Nunca degradamos un receipt que ya
+    // había sido publicado como read antes de desactivar la preferencia.
+    try {
+      final existing = await _client
+          .from('message_receipts')
+          .select('status')
+          .eq('message_id', messageId)
+          .eq('user_id', _userId)
+          .maybeSingle();
+      if (existing?['status']?.toString() != 'read') {
+        await _client.from('message_receipts').upsert({
+          'message_id': messageId,
+          'user_id': _userId,
+          'status': 'delivered',
+          'status_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'message_id,user_id');
+      }
+    } catch (e) {
+      debugPrint('Delivered receipt preservation error: $e');
     }
   }
 
@@ -248,19 +350,7 @@ class ChatService extends legacy.ChatService {
           .map((row) => row['id'].toString())
           .toList();
 
-      final readIds = <String>{};
-      if (incomingIds.isNotEmpty) {
-        final receiptRows = await _client
-            .from('message_receipts')
-            .select('message_id,status')
-            .eq('user_id', _userId)
-            .inFilter('message_id', incomingIds);
-        for (final receipt in receiptRows as List) {
-          if (receipt['status']?.toString() == 'read') {
-            readIds.add(receipt['message_id'].toString());
-          }
-        }
-      }
+      final readIds = await _loadPrivateReadIds(incomingIds);
 
       final unreadByConversation = <String, int>{};
       for (final row in chatRows) {
