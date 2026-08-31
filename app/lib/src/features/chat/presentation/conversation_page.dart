@@ -241,7 +241,7 @@ class _ConversationPageState extends State<ConversationPage> {
                   children: [
                     Icon(Icons.notifications_off_outlined),
                     SizedBox(width: 12),
-                    Text('Silenciar notificaciones'),
+                    Text('Silenciar / activar notificaciones'),
                   ],
                 ),
               ),
@@ -510,13 +510,31 @@ class _ConversationPageState extends State<ConversationPage> {
     );
   }
 
-  void _toggleMute() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notificaciones silenciadas para esta conversación.'),
-        backgroundColor: AppColors.surfaceRaised,
-      ),
-    );
+  Future<void> _toggleMute() async {
+    try {
+      final current = await _service.isConversationMuted(widget.conversationId);
+      final next = !current;
+      await _service.setConversationMuted(widget.conversationId, next);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            next
+                ? 'Notificaciones silenciadas para esta conversación.'
+                : 'Notificaciones activadas para esta conversación.',
+          ),
+          backgroundColor: AppColors.surfaceRaised,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo cambiar la configuración de notificaciones.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _confirmClearChat() async {
